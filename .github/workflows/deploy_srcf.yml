@@ -31,7 +31,7 @@ jobs:
         
       # Runs a single command using the runners shell
       - name: NPM Install Dependencies
-        run: cd website && npm install . --legacy-peer-deps
+        run: cd website && npm install . --legacy-peer-deps --production=false
 
       # Runs a set of commands using the runners shell
       - name: NPM Build
