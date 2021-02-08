@@ -14,7 +14,7 @@ export default function Footer() {
       <Container>
         <Row>
           <Col md="9">
-            Produced by authors from The University of Cambridge and The University of Toronto.<br />
+            Produced by researchers from The University of Cambridge and The University of Toronto.<br />
             Website by <a href="https://www.cl.cam.ac.uk/~ndb40">Nicholas Boucher</a> with thanks to <a href="https://github.com/creativetimofficial/blk-design-system-react">Blk• React</a>.<br />
             <br />
             &copy;&nbsp;2021

@@ -4,6 +4,7 @@ import React from "react";
 import IndexNavbar from "components/Navbars/IndexNavbar.js";
 import PageHeader from "components/PageHeader/PageHeader.js";
 import Footer from "components/Footer/Footer.js";
+import Description from "components/Index/Description.js";
 
 export default function Index() {
   React.useEffect(() => {
@@ -19,7 +20,7 @@ export default function Index() {
       <div className="wrapper">
         <PageHeader />
         <div className="main">
-
+          <Description />
         </div>
         <Footer />
       </div>
