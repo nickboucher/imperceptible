@@ -22,17 +22,14 @@ jobs:
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
-
-      - name: Switch to Website Directory
-        run: cd website
         
       # Runs a single command using the runners shell
       - name: NPM Install Dependencies
-        run: npm install . --legacy-peer-deps
+        run: cd website && npm install . --legacy-peer-deps
 
       # Runs a set of commands using the runners shell
       - name: NPM Build
-        run: npm run build
+        run: cd website && npm run build
       
       # Publish build artifacts to remote server
       - name: SSH Deploy
@@ -41,6 +38,6 @@ jobs:
           SSH_PRIVATE_KEY: ${{ secrets.SRCF_RSA }}
           REMOTE_HOST: ${{ secrets.SRCF_HOST }}
           REMOTE_USER: ${{ secrets.SRCF_USER }}
-          SOURCE: build/
+          SOURCE: website/build/
           TARGET: ${{ secrets.DEPLOY_DIR }}
           ARGS: -azv --delete --exclude '.htaccess'
