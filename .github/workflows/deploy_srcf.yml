@@ -35,7 +35,7 @@ jobs:
 
       # Runs a set of commands using the runners shell
       - name: NPM Build
-        run: cd website && npm run build
+        run: cd website && CI="" npm run build
       
       # Publish build artifacts to remote server
       - name: SSH Deploy
