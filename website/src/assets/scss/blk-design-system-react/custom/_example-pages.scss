@@ -33,7 +33,6 @@
       animation: move-left-right 1s infinite;
       @include linear-gradient($primary-states, $primary);
       position: absolute;
-      transition: 0.5s ease-out;
       overflow: hidden;
       border-radius: 20%;
       text-align: center;

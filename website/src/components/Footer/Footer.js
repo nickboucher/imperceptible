@@ -15,7 +15,7 @@ export default function Footer() {
         <Row>
           <Col md="9">
             Produced by researchers from The University of Cambridge and The University of Toronto.<br />
-            Website by <a href="https://www.cl.cam.ac.uk/~ndb40">Nicholas Boucher</a> with thanks to <a href="https://github.com/creativetimofficial/blk-design-system-react">Blk• React</a>.<br />
+            Website by <a href="https://www.cl.cam.ac.uk/~ndb40">Nicholas Boucher</a> with thanks to <a href="https://github.com/creativetimofficial/blk-design-system-react" rel="noreferrer">Blk• React</a> and <a href="https://www.srcf.net" rel="noreferrer">SRCF</a>.<br />
             <br />
             &copy;&nbsp;2021
           </Col>

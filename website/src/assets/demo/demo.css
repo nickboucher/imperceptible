@@ -523,3 +523,23 @@
     opacity: 0; }
   100% {
     opacity: 1; } }
+
+.below-nav {
+  margin-top: 76px;
+}
+
+.page-header .container.below-nav {
+  padding-top: 4em;
+}
+
+.page-header .container.below-nav h1 {
+  color: #ffffff;
+  font-size: 5em;
+}
+
+.generated {
+  background-color:#1d8cf8;
+  border-radius: 5px;
+  width: 100%;
+  padding: 10px;
+}
