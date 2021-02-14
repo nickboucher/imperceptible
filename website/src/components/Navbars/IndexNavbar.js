@@ -104,7 +104,7 @@ export default function IndexNavbar() {
               <Button
                 className="nav-link d-lg-block mt-2 mt-lg-0"
                 color="primary"
-                href="#"
+                href={process.env.PUBLIC_URL + '/paper.pdf'}
               >
                 &nbsp;Read Paper&nbsp;
               </Button>
