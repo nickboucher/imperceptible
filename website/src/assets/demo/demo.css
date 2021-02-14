@@ -543,3 +543,26 @@
   width: 100%;
   padding: 10px;
 }
+
+.validated {
+  background-color:#1f2251;
+  border-radius: 5px;
+  width: 100%;
+  padding: 10px;
+}
+
+.validated p {
+  word-break: break-word;
+  line-height: 1.75;
+}
+
+.min-width-9 {
+  min-width: 9em;
+}
+
+.unicode {
+  background-color: #1d8cf8;
+  margin: 1px;
+  border-radius: 1px;
+  white-space: nowrap;
+}

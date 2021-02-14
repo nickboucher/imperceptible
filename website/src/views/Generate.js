@@ -19,6 +19,8 @@ import {
   } from "reactstrap";
   import {CopyToClipboard} from 'react-copy-to-clipboard';
 
+import {invisibleChars, homoglyphChars} from "components/Constants.js";
+
 // Generates a random integer in (min,max]
 const randrange = (min, max) => {
     return Math.floor(Math.random() * (max - min) ) + min;
@@ -27,15 +29,10 @@ const randrange = (min, max) => {
 // Generates a random integer in (0,max]
 const rand = (max) => randrange(0, max);
 
-// Selection of invisible characters
-const invisibleChars = ['\u200B', '\u200D'];
-
 // Generates a random invisible character
 const invisible = () => {
   return invisibleChars[rand(invisibleChars.length)];
 }
-
-const homoglyphChars = { '!': 'ǃ', 'A': 'Α', 'B': 'Β', 'C': 'С', 'E': 'Ε', 'H': 'Η', 'I': 'Ι', 'J': 'Ј', 'K': 'Κ', 'M': 'Μ', 'N': 'Ν', 'O': 'Ο', 'P': 'Ρ', 'S': 'Ѕ', 'T': 'Τ', 'X': 'Χ', 'Y': 'Υ', 'Z': 'Ζ', 'a': 'а', 'c': 'с', 'd': 'ԁ', 'e': 'е', 'h': 'һ', 'i': 'і', 'j': 'ϳ', 'o': 'ο', 'p': 'р', 's': 'ѕ', 'x': 'х', 'y': 'у', 'Æ': 'Ӕ', 'Ð': 'Đ', 'æ': 'ӕ', 'ĸ': 'к', 'Ƃ': 'Б', 'Ə': 'Ә', 'Ɵ': 'Ө', 'Ʃ': 'Σ', 'ǝ': 'ə', 'Ʌ': 'Λ', 'ə': 'ә', 'ɛ': 'ε', 'ɩ': 'ι', 'ɪ': 'ӏ', 'ɵ': 'ө', 'ʒ': 'ӡ', 'ʙ': 'в', 'ʜ': 'н', 'Γ': 'Г', 'Π': 'П', 'α': '⍺', 'ι': '⍳', 'ρ': '⍴', 'ω': '⍵', 'г': 'ᴦ', 'л': 'ᴫ', 'п': 'ᴨ', 'ဝ': '၀', 'អ': 'ឣ', 'ᠵ': 'ᡕ', 'ᦞ': '᧐', 'ᦱ': '᧑', 'ᩅ': '᪀', 'ᬍ': '᭒', 'ᬑ': '᭓', 'ᬨ': '᭘', '᭐': '᭜', 'ᴍ': 'м', 'ᴘ': 'ᴩ', 'ᴛ': 'т', 'Ⱨ': 'Ң', 'Ⱪ': 'Қ', '꧐': '꧆', '𐎂': '𐏑', '𐎓': '𐏓', '𐎚': '𒀸', '𐒆': '𐒠' }
 
 const TooltipContent = ({ scheduleUpdate, copied }) => {
     useEffect(scheduleUpdate, [copied, scheduleUpdate])
@@ -108,7 +105,7 @@ export default function Generate() {
         results[r] = result.join("");
       }
       setOutput(results.join("\n"));
-      setOutputHtml(results.map(result => <p>{result.replace(" ", "\xA0")}</p>));
+      setOutputHtml(results.map((result, index) => <p key={`p${index}`}>{result.replace(" ", "\xA0")}</p>));
     }, [input, invisibles, homoglyphs, reorderings, deletions]);
     const toggle = () => {
       setTooltipOpen(!tooltipOpen);
@@ -136,7 +133,7 @@ export default function Generate() {
             className="path"
             src={require("assets/img/path4.png").default}
           />
-          <Container className="below-nav">
+          <Container className="below-nav mb-4">
               <Row>
                   <Col md={12} className="text-center">
                     <h1><b>Generate</b></h1>
