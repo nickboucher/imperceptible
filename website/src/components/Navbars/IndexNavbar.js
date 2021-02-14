@@ -102,7 +102,7 @@ export default function IndexNavbar() {
             </NavItem>
             <NavItem>
               <Button
-                className="nav-link d-lg-block"
+                className="nav-link d-lg-block mt-2 mt-lg-0"
                 color="primary"
                 href="#"
               >
