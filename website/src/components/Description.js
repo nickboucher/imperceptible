@@ -104,7 +104,7 @@ export default function Basics() {
             <p className="main-text pt-3">The key defense takeaway for imperceptible perturbations is that user inputs must be sanitized before ingress into an NLP pipeline. Without this, users may be vulnerable to adversarially manipulated results. Much like the consequences of SQL injection, imperceptible perturbations require conscious design decisions for all systems using affected technologies.</p>
 
             <h1 className="title pt-5">There's More to Know.</h1>
-            <p className="main-text">Read our paper to learn the details of crafting and defending against imperceptible perturbations.</p>
+            <p className="main-text">Read our <a href={process.env.PUBLIC_URL + '/paper.pdf'}>paper</a> to learn the details of crafting and defending against imperceptible perturbations.</p>
             <p className="main-text pt-3 pb-4">If you use our paper or anything on this site in your own work, please cite the following:</p>
             <code>
               <span class="code">@article&#123;boucher_imperceptible_2021,</span>
