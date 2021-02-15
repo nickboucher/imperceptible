@@ -124,119 +124,123 @@ export default function Validate() {
             className="path"
             src={require("assets/img/path2.png").default}
           />
-          <Container className="below-nav mb-4">
-              <Row>
-                  <Col md={12} className="text-center">
-                    <h1><b>Validate</b></h1>
+          <div className="w-100">
+            <Container className="below-nav mb-4">
+                <Row>
+                    <Col md={12} className="text-center">
+                      <h1><b>Validate</b></h1>
+                    </Col>
+                </Row>
+                <Form>
+                  <FormGroup row className="mt-5 mb-n2">
+                      <Label for="inputText" md={2}><h2>Input&nbsp;={'>'}</h2></Label>
+                      <Col md={10}>
+                          <Input
+                              type="textarea"
+                              name="inputText"
+                              id="inputText"
+                              placeholder="Paste some text here to validate whether it has been manipulated with imperceptible perturbations..."
+                              onChange={e => setInput(e.target.value)}
+                          />
+                      </Col>
+                  </FormGroup>
+              </Form>
+              <Row className="mt-4 pt-4 mb-4 pb-4">
+                  <Col md={2} style={{ visibility: input.length ? null : 'hidden' }}>
+                      <h3>Output&nbsp;={'>'}</h3>
+                  </Col>
+                  <Col md={10}>
+                    <Row className="pb-4">
+                      <Col md={3} xs={6} className="mb-4 mb-md-0">
+                        <Nav className="nav-pills-icons nav-pills-warning" pills>
+                          <NavItem id="invisibles" className="min-width-9">
+                            <NavLink className={invisibles ? "active" : null}>
+                              <i className="tim-icons icon-light-3" />
+                              Invisibles
+                            </NavLink>
+                          </NavItem>
+                          <UncontrolledPopover target="invisibles" placement="top" trigger="hover" fade={false}>
+                            <PopoverHeader>Invisible Characters</PopoverHeader>
+                            <PopoverBody>
+                              {invisibles ?
+                                <span>This text <b>may contain</b> invisible characters.</span> :
+                                <span>This text <b>likely doesn't contain</b> invisible characters.</span>}
+                            </PopoverBody>
+                          </UncontrolledPopover>
+                        </Nav>
+                      </Col>
+                      <Col md={3} xs={6} className="mb-4 mb-md-0">
+                        <Nav className="nav-pills-icons nav-pills-warning" pills>
+                          <NavItem id="homoglyphs" className="min-width-9">
+                            <NavLink className={homoglyphs ? "active" : null}>
+                              <i className="tim-icons icon-single-copy-04" />
+                              Homoglyphs
+                            </NavLink>
+                          </NavItem>
+                          <UncontrolledPopover target="homoglyphs" placement="top" trigger="hover" fade={false}>
+                            <PopoverHeader>Homoglyphs</PopoverHeader>
+                            <PopoverBody>
+                              {homoglyphs ?
+                                <span>This text <b>may contain</b> homoglyphs.</span> :
+                                <span>This text <b>likely doesn't contain</b> homoglyphs.</span>}
+                            </PopoverBody>
+                          </UncontrolledPopover>
+                        </Nav>
+                      </Col>
+                      <Col md={3} xs={6} className="mb-4 mb-md-0">
+                        <Nav className="nav-pills-icons nav-pills-warning" pills>
+                          <NavItem id="reorderings" className="min-width-9">
+                            <NavLink className={reorderings ? "active" : null}>
+                              <i className="tim-icons icon-refresh-02" />
+                              Reorderings
+                            </NavLink>
+                          </NavItem>
+                          <UncontrolledPopover target="reorderings" placement="top" trigger="hover" fade={false}>
+                            <PopoverHeader>Reorderings</PopoverHeader>
+                            <PopoverBody>
+                              {reorderings ?
+                                <span>This text <b>may contain</b> reorderings.</span> :
+                                <span>This text <b>likely doesn't contain</b> reorderings.</span>}
+                            </PopoverBody>
+                          </UncontrolledPopover>
+                        </Nav>
+                      </Col>
+                      <Col md={3} xs={6} className="mb-4 mb-md-0">
+                        <Nav className="nav-pills-icons nav-pills-warning" pills>
+                          <NavItem id="deletions" className="min-width-9">
+                            <NavLink className={deletions ? "active" : null}>
+                              <i className="tim-icons icon-simple-remove" />
+                              Deletions
+                            </NavLink>
+                          </NavItem>
+                          <UncontrolledPopover target="deletions" placement="top" trigger="hover" fade={false}>
+                            <PopoverHeader>Deletions</PopoverHeader>
+                            <PopoverBody>
+                              {deletions ?
+                                <span>This text <b>may contain</b> deletions.</span> :
+                                <span>This text <b>likely doesn't contain</b> deletions.</span>}
+                            </PopoverBody>
+                          </UncontrolledPopover>
+                        </Nav>
+                      </Col>
+                    </Row>
+                    <div className="validated mt-4" style={{ display: input.length ? null : 'None' }}>
+                      <p className="text-muted"><b>Encoding Visualization:</b></p>
+                      {output}
+                    </div>
                   </Col>
               </Row>
-              <Form>
-                <FormGroup row className="mt-5 mb-n2">
-                    <Label for="inputText" md={2}><h2>Input&nbsp;={'>'}</h2></Label>
-                    <Col md={10}>
-                        <Input
-                            type="textarea"
-                            name="inputText"
-                            id="inputText"
-                            placeholder="Paste some text here to validate whether it has been manipulated with imperceptible perturbations..."
-                            onChange={e => setInput(e.target.value)}
-                        />
+            </Container>
+          </div>
+          <div className="w-100 align-self-end">
+            <Container className="pt-0 pb-4">
+                <Row>
+                    <Col md={{ size: 10, offset: 2}}>
+                      <p className="text-muted">This tool tests whether the input string contains encodings that may be indicators of imperceptible perturbations. It is not guaranteed to detect all forms of imperceptible perturbations. All text entered remains on your local machine. Nothing is transmitted to or logged on any server. This tool is for academic purposes only and the user holds sole responsibility for how it is used.</p>
                     </Col>
-                </FormGroup>
-            </Form>
-            <Row className="mt-4 pt-4 mb-4 pb-4">
-                <Col md={2} style={{ visibility: input.length ? null : 'hidden' }}>
-                    <h3>Output&nbsp;={'>'}</h3>
-                </Col>
-                <Col md={10}>
-                  <Row className="pb-4">
-                    <Col md={3} xs={6} className="mb-4 mb-md-0">
-                      <Nav className="nav-pills-icons nav-pills-warning" pills>
-                        <NavItem id="invisibles" className="min-width-9">
-                          <NavLink className={invisibles ? "active" : null}>
-                            <i className="tim-icons icon-light-3" />
-                            Invisibles
-                          </NavLink>
-                        </NavItem>
-                        <UncontrolledPopover target="invisibles" placement="top" trigger="hover" fade={false}>
-                          <PopoverHeader>Invisible Characters</PopoverHeader>
-                          <PopoverBody>
-                            {invisibles ?
-                              <span>This text <b>may contain</b> invisible characters.</span> :
-                              <span>This text <b>likely doesn't contain</b> invisible characters.</span>}
-                          </PopoverBody>
-                        </UncontrolledPopover>
-                      </Nav>
-                    </Col>
-                    <Col md={3} xs={6} className="mb-4 mb-md-0">
-                      <Nav className="nav-pills-icons nav-pills-warning" pills>
-                        <NavItem id="homoglyphs" className="min-width-9">
-                          <NavLink className={homoglyphs ? "active" : null}>
-                            <i className="tim-icons icon-single-copy-04" />
-                            Homoglyphs
-                          </NavLink>
-                        </NavItem>
-                        <UncontrolledPopover target="homoglyphs" placement="top" trigger="hover" fade={false}>
-                          <PopoverHeader>Homoglyphs</PopoverHeader>
-                          <PopoverBody>
-                            {homoglyphs ?
-                              <span>This text <b>may contain</b> homoglyphs.</span> :
-                              <span>This text <b>likely doesn't contain</b> homoglyphs.</span>}
-                          </PopoverBody>
-                        </UncontrolledPopover>
-                      </Nav>
-                    </Col>
-                    <Col md={3} xs={6} className="mb-4 mb-md-0">
-                      <Nav className="nav-pills-icons nav-pills-warning" pills>
-                        <NavItem id="reorderings" className="min-width-9">
-                          <NavLink className={reorderings ? "active" : null}>
-                            <i className="tim-icons icon-refresh-02" />
-                            Reorderings
-                          </NavLink>
-                        </NavItem>
-                        <UncontrolledPopover target="reorderings" placement="top" trigger="hover" fade={false}>
-                          <PopoverHeader>Reorderings</PopoverHeader>
-                          <PopoverBody>
-                            {reorderings ?
-                              <span>This text <b>may contain</b> reorderings.</span> :
-                              <span>This text <b>likely doesn't contain</b> reorderings.</span>}
-                          </PopoverBody>
-                        </UncontrolledPopover>
-                      </Nav>
-                    </Col>
-                    <Col md={3} xs={6} className="mb-4 mb-md-0">
-                      <Nav className="nav-pills-icons nav-pills-warning" pills>
-                        <NavItem id="deletions" className="min-width-9">
-                          <NavLink className={deletions ? "active" : null}>
-                            <i className="tim-icons icon-simple-remove" />
-                            Deletions
-                          </NavLink>
-                        </NavItem>
-                        <UncontrolledPopover target="deletions" placement="top" trigger="hover" fade={false}>
-                          <PopoverHeader>Deletions</PopoverHeader>
-                          <PopoverBody>
-                            {deletions ?
-                              <span>This text <b>may contain</b> deletions.</span> :
-                              <span>This text <b>likely doesn't contain</b> deletions.</span>}
-                          </PopoverBody>
-                        </UncontrolledPopover>
-                      </Nav>
-                    </Col>
-                  </Row>
-                  <div className="validated mt-4" style={{ display: input.length ? null : 'None' }}>
-                    <p className="text-muted"><b>Encoding Visualization:</b></p>
-                    {output}
-                  </div>
-                </Col>
-            </Row>
-          </Container>
-          <Container className="pt-0 pb-4 align-self-end">
-            <Row>
-                <Col md={{ size: 10, offset: 2}}>
-                  <p className="text-muted">This tool tests whether the input string contains encodings that may be indicators of imperceptible perturbations. It is not guaranteed to detect all forms of imperceptible perturbations. All text entered remains on your local machine. Nothing is transmitted to or logged on any server. This tool is for academic purposes only and the user holds sole responsibility for how it is used.</p>
-                </Col>
-            </Row>
-        </Container>
+                </Row>
+            </Container>
+          </div>
       </div>
       <Footer />
     </div>
