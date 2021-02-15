@@ -1,8 +1,8 @@
 import {useState, useEffect} from "react";
 
 // core components
-import IndexNavbar from "components/Navbars/IndexNavbar.js";
-import Footer from "components/Footer/Footer.js";
+import IndexNavbar from "components/IndexNavbar.js";
+import Footer from "components/Footer.js";
 
 // reactstrap components
 import {
@@ -19,7 +19,7 @@ import {
   } from "reactstrap";
   import {CopyToClipboard} from 'react-copy-to-clipboard';
 
-import {invisibleChars, homoglyphChars} from "components/Constants.js";
+import {invisibleChars, homoglyphChars} from "variables/Constants.js";
 
 // Generates a random integer in (min,max]
 const randrange = (min, max) => {

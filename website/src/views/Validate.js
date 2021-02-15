@@ -1,8 +1,8 @@
 import {useState, useEffect} from "react";
 
 // core components
-import IndexNavbar from "components/Navbars/IndexNavbar.js";
-import Footer from "components/Footer/Footer.js";
+import IndexNavbar from "components/IndexNavbar.js";
+import Footer from "components/Footer.js";
 
 // reactstrap components
 import {
@@ -21,7 +21,7 @@ import {
   PopoverBody
 } from "reactstrap";
 
-import {invisibleChars, reorderingChars, deletionChars} from "components/Constants.js";
+import {invisibleChars, reorderingChars, deletionChars} from "variables/Constants.js";
 import unicodeRanges from "unicode-range-json";
 
 const unicodeRange = (char) => {

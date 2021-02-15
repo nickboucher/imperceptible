@@ -1,10 +1,10 @@
 import React from "react";
 
 // core components
-import IndexNavbar from "components/Navbars/IndexNavbar.js";
-import PageHeader from "components/PageHeader/PageHeader.js";
-import Footer from "components/Footer/Footer.js";
-import Description from "components/Index/Description.js";
+import IndexNavbar from "components/IndexNavbar.js";
+import PageHeader from "components/PageHeader.js";
+import Footer from "components/Footer.js";
+import Description from "components/Description.js";
 
 export default function Index() {
   React.useEffect(() => {
