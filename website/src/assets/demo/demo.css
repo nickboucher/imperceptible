@@ -560,9 +560,21 @@
   min-width: 9em;
 }
 
+.min-width-10 {
+  min-width: 10em;
+}
+
 .unicode {
   background-color: #1d8cf8;
   margin: 1px;
   border-radius: 1px;
   white-space: nowrap;
+}
+
+.code {
+  display: block;
+}
+
+.tab {
+  margin-left: 3em;
 }
