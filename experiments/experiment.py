@@ -358,8 +358,8 @@ class MnliTargetedObjective(MnliObjective):
                                     popsize=popsize, polish=polish)
     end = process_time()
     candidate = self.candidate(result.x)
-    tokens = model.encode(candidate, self.hypothesis)
-    predict = model.predict('mnli', tokens)
+    tokens = self.model.encode(candidate, self.hypothesis)
+    predict = self.model.predict('mnli', tokens)
     probs = softmax(predict, dim=1).cpu().detach().numpy()[0]
     selection = probs.argmax().item()
     inp_tokens = self.model.encode(self.input, self.hypothesis)
@@ -419,6 +419,36 @@ class DeletionTargetedMnliObjective(MnliTargetedObjective, DeletionObjective):
     self.del_chr = del_chr
     self.ins_chr_min: str = ins_chr_min
     self.ins_chr_max: str = ins_chr_max
+
+
+class MnliTargetedNoLogitsObjective(MnliTargetedObjective):
+
+  def objective(self) -> Callable[[List[float]], float]:
+      def _objective(perturbations: List[float]) -> float:
+        candidate: str = self.candidate(perturbations)
+        tokens = self.model.encode(candidate, self.hypothesis)
+        predict = self.model.predict('mnli', tokens)
+        if predict.argmax().item() == self.target:
+          return -np.inf
+        else:
+          return np.inf
+      return _objective
+
+
+class InvisibleCharacterTargetedMnliNoLogitsObjective(MnliTargetedNoLogitsObjective, InvisibleCharacterTargetedMnliObjective):
+  pass
+
+
+class HomoglyphTargetedMnliNoLogitsObjective(MnliTargetedNoLogitsObjective, HomoglyphTargetedMnliObjective):
+  pass
+
+
+class ReorderTargetedMnliNoLogitsObjective(MnliTargetedNoLogitsObjective, ReorderTargetedMnliObjective):
+  pass
+
+
+class DeletionTargetedMnliNoLogitsObjective(MnliTargetedNoLogitsObjective, DeletionTargetedMnliObjective):
+  pass
 
 
 # --- Helper Functions ---
@@ -493,14 +523,14 @@ def load_source(num_examples):
       target[docid][segid] = str(node.string)
   return source, target, i
 
-def experiment(model, objective, source, target, min_perturb, max_perturb, file, maxiter, popsize, n_examples):
-  perturbs = { '0': dict() }
+def experiment(model, objective, source, target, min_perturb, max_perturb, file, maxiter, popsize, n_examples, label):
+  perturbs = { label: { '0': dict() } }
   for docid, doc in source.items():
-    perturbs['0'][docid] = {}
+    perturbs[label]['0'][docid] = {}
     for segid, seg in doc.items():
       ref = target[docid][segid]
       output = model.translate(seg)
-      perturbs['0'][docid][segid] = {
+      perturbs[label]['0'][docid][segid] = {
             'adv_example': seg,
             'adv_example_enc': [],
             'input_translation_distance': levenshtein.distance(seg, seg),
@@ -518,25 +548,25 @@ def experiment(model, objective, source, target, min_perturb, max_perturb, file,
           }
   with tqdm(total=n_examples*(max_perturb-min_perturb+1), desc="Adv. Examples") as pbar:
     for i in range(min_perturb, max_perturb+1):
-      perturbs[str(i)] = dict()
+      perturbs[label][str(i)] = dict()
       for docid, doc in source.items():
-        perturbs[str(i)][docid] = dict()
+        perturbs[label][str(i)][docid] = dict()
         for segid, seg in doc.items():
           ref = target[docid][segid]
-          perturbs[str(i)][docid][segid] = objective(en2fr, seg, ref, max_perturbs=i).differential_evolution(maxiter=maxiter, popsize=popsize)
+          perturbs[label][str(i)][docid][segid] = objective(en2fr, seg, ref, max_perturbs=i).differential_evolution(maxiter=maxiter, popsize=popsize)
           with open(file, 'wb') as f:
             pickle.dump(perturbs, f)
           pbar.update(1)
 
-def mnli_experiment(model, objective, data, file, min_budget, max_budget, maxiter, popsize):
-  perturbs = { '0': dict() }
+def mnli_experiment(model, objective, data, file, min_budget, max_budget, maxiter, popsize, exp_label):
+  perturbs = { exp_label: { '0': dict() } }
   for test in data:
     tokens = model.encode(test['sentence1'], test['sentence2'])
     predict = model.predict('mnli', tokens)
     predictions = predict.cpu().detach().numpy()[0]
     label = label_map[test['gold_label']]
     correct = predict.argmax().item() == label
-    perturbs['0'][test['pairID']] = {
+    perturbs[exp_label]['0'][test['pairID']] = {
         'adv_example': test['sentence1'],
         'adv_example_enc': [],
         'input': test['sentence1'],
@@ -553,18 +583,18 @@ def mnli_experiment(model, objective, data, file, min_budget, max_budget, maxite
       }
   with tqdm(total=len(data)*(max_budget-min_budget+1), desc="Adv. Examples") as pbar:
     for budget in range(min_budget, max_budget+1):
-      perturbs[str(budget)] = dict()
+      perturbs[exp_label][str(budget)] = dict()
       for test in data:
         obj = objective(mnli, test['sentence1'], test['sentence2'], label_map[test['gold_label']], budget)
         example = obj.differential_evolution(maxiter=maxiter, popsize=popsize)
-        perturbs[str(budget)][test['pairID']] = example
+        perturbs[exp_label][str(budget)][test['pairID']] = example
         with open(file, 'wb') as f:
           pickle.dump(perturbs, f)
         pbar.update(1)
 
 
-def mnli_targeted_experiment(objective, model, inputs, file, min_budget, max_budget, maxiter, popsize):
-  perturbs = { '0': dict() }
+def mnli_targeted_experiment(objective, model, inputs, file, min_budget, max_budget, maxiter, popsize, exp_label):
+  perturbs = { exp_label: { '0': dict() } }
   for test in data:
     tokens = model.encode(test['sentence1'], test['sentence2'])
     predict = model.predict('mnli', tokens)
@@ -572,9 +602,9 @@ def mnli_targeted_experiment(objective, model, inputs, file, min_budget, max_bud
     selection = probs.argmax().item()
     label = label_map[test['gold_label']]
     correct = predict.argmax().item() == label
-    perturbs['0'][test['pairID']] = dict()
+    perturbs[exp_label]['0'][test['pairID']] = dict()
     for target in range(len(label_map)):
-      perturbs['0'][test['pairID']][str(target)] = {
+      perturbs[exp_label]['0'][test['pairID']][str(target)] = {
             'adv_example': test['sentence1'],
             'adv_example_enc': [],
             'input': test['sentence1'],
@@ -595,15 +625,15 @@ def mnli_targeted_experiment(objective, model, inputs, file, min_budget, max_bud
           }
   with tqdm(total=len(inputs)*(max_budget-min_budget+1)*len(label_map), desc="Adv. Examples") as pbar:
     for budget in range(min_budget, max_budget+1):
-      perturbs[str(budget)] = dict()
+      perturbs[exp_label][str(budget)] = dict()
       for input in inputs:
-        perturbs[str(budget)][input['pairID']] = dict()
+        perturbs[exp_label][str(budget)][input['pairID']] = dict()
         for target in range(len(label_map)):
           obj = objective(model, input['sentence1'], input['sentence2'], label_map[input['gold_label']], target, budget)
-          example = obj.differential_evolution(print_result=False, verbose=False, maxiter=maxiter, popsize=popsize)
-          perturbs[str(budget)][input['pairID']][str(target)] = example
+          example = obj.differential_evolution(verbose=False, maxiter=maxiter, popsize=popsize)
+          perturbs[exp_label][str(budget)][input['pairID']][str(target)] = example
           with open(file, 'wb') as f:
-            pickle.dump(results, f)
+            pickle.dump(perturbs, f)
           pbar.update(1)
 
 def load_en2fr(cpu):
@@ -655,7 +685,9 @@ if __name__ == '__main__':
   parser.add_argument('-u', '--max-perturbs', type=int, default=5, help="The upper bound (inclusive) of the perturbation budget range.")
   parser.add_argument('-a', '--maxiter', type=int, default=10, help="The maximum number of iterations in the genetic algorithm.")
   parser.add_argument('-p', '--popsize', type=int, default=32, help="The size of the population in he genetic algorithm.")
-  parser.add_argument('-x', '--targeted', action='store_true', help="Perform a targeted attack.")
+  targeted = parser.add_mutually_exclusive_group()
+  targeted.add_argument('-x', '--targeted', action='store_true', help="Perform a targeted attack.")
+  targeted.add_argument('-X', '--targeted-no-logits', action='store_true', help="Perform a targeted attack without access to inference result logits.")
   args = parser.parse_args()
 
   if args.translation:
@@ -670,39 +702,85 @@ if __name__ == '__main__':
     if args.invisible_chars:
       print("Starting invisible characters translation experiment.")
       objective = InvisibleCharacterObjective
+      label = "translation_invisibles"
     elif args.homoglyphs:
       print("Starting homoglyphs translation experiment.")
       objective = InvisibleCharacterObjective
+      label = "translation_homoglyphs"
     elif args.reorderings:
       print("Starting reorderings translation experiment.")
       objective = InvisibleCharacterObjective
+      label = "translation_reorderings"
     elif args.deletions:
       print("Starting deletions translation experiment.")
       objective = InvisibleCharacterObjective
+      label = "translation_deletions"
 
-    experiment(en2fr, objective, source, target, args.min_perturbs, args.max_perturbs, args.pkl_file, args.maxiter, args.popsize, n_examples)
+    experiment(en2fr, objective, source, target, args.min_perturbs, args.max_perturbs, args.pkl_file, args.maxiter, args.popsize, n_examples, label)
 
   elif args.mnli:
     mnli = load_mnli(args.cpu)
     data = mnli_test[:args.num_examples]
     print(f"Loaded {len(data)} strings from corpus.")
 
-    if args.invisible_chars:
-      print(f"Starting invisible characters {'targeted ' if args.targeted else '' }MNLI experiment.")
-      objective = InvisibleCharacterMnliObjective
-    elif args.homoglyphs:
-      print(f"Starting homoglyphs {'targeted ' if args.targeted else '' }MNLI experiment.")
-      objective = InvisibleCharacterMnliObjective
-    elif args.reorderings:
-      print(f"Starting reorderings {'targeted ' if args.targeted else '' }MNLI experiment.")
-      objective = InvisibleCharacterMnliObjective
-    elif args.deletions:
-      print(f"Starting deletions {'targeted ' if args.targeted else '' }MNLI experiment.")
-      objective = InvisibleCharacterMnliObjective
-
     if args.targeted:
-      mnli_targeted_experiment(objective, mnli, data, args.pkl_file, args.min_perturbs, args.max_perturbs, args.maxiter, args.popsize)
+      if args.invisible_chars:
+        print(f"Starting invisible characters targeted MNLI experiment.")
+        objective = InvisibleCharacterTargetedMnliObjective
+        label = "mnli_invisibles_targeted"
+      elif args.homoglyphs:
+        print(f"Starting homoglyphs targeted MNLI experiment.")
+        objective = InvisibleCharacterTargetedMnliObjective
+        label = "mnli_homoglyphs_targeted"
+      elif args.reorderings:
+        print(f"Starting reorderings targeted MNLI experiment.")
+        objective = InvisibleCharacterTargetedMnliObjective
+        label = "mnli_reorderings_targeted"
+      elif args.deletions:
+        print(f"Starting deletions targeted MNLI experiment.")
+        objective = InvisibleCharacterTargetedMnliObjective
+        label = "mnli_deletions_targeted"
+      
+      mnli_targeted_experiment(objective, mnli, data, args.pkl_file, args.min_perturbs, args.max_perturbs, args.maxiter, args.popsize, label)
+    
+    elif args.targeted_no_logits:
+      if args.invisible_chars:
+        print(f"Starting invisible characters targeted MNLI (no logits) experiment.")
+        objective = InvisibleCharacterTargetedMnliNoLogitsObjective
+        label = "mnli_invisibles_targeted_nologits"
+      elif args.homoglyphs:
+        print(f"Starting homoglyphs targeted MNLI (no logits) experiment.")
+        objective = InvisibleCharacterTargetedMnliNoLogitsObjective
+        label = "mnli_homoglyphs_targeted_nologits"
+      elif args.reorderings:
+        print(f"Starting reorderings targeted MNLI (no logits) experiment.")
+        objective = InvisibleCharacterTargetedMnliNoLogitsObjective
+        label = "mnli_reorderings_targeted_nologits"
+      elif args.deletions:
+        print(f"Starting deletions targeted MNLI (no logits) experiment.")
+        objective = InvisibleCharacterTargetedMnliNoLogitsObjective
+        label = "mnli_deletions_targeted_nologits"
+      
+      mnli_targeted_experiment(objective, mnli, data, args.pkl_file, args.min_perturbs, args.max_perturbs, args.maxiter, args.popsize, label)
+    
     else:
-      mnli_experiment(mnli, objective, data, args.pkl_file, args.min_perturbs, args.max_perturbs, args.maxiter, args.popsize)
+      if args.invisible_chars:
+        print(f"Starting invisible characters MNLI experiment.")
+        objective = InvisibleCharacterMnliObjective
+        label = "mnli_invisibles_untargeted"
+      elif args.homoglyphs:
+        print(f"Starting homoglyphs MNLI experiment.")
+        objective = InvisibleCharacterMnliObjective
+        label = "mnli_homoglyphs_untargeted"
+      elif args.reorderings:
+        print(f"Starting reorderings MNLI experiment.")
+        objective = InvisibleCharacterMnliObjective
+        label = "mnli_reorderings_untargeted"
+      elif args.deletions:
+        print(f"Starting deletions MNLI experiment.")
+        objective = InvisibleCharacterMnliObjective
+        label = "mnli_deletions_untargeted"
+
+      mnli_experiment(mnli, objective, data, args.pkl_file, args.min_perturbs, args.max_perturbs, args.maxiter, args.popsize, label)
 
 print(f"Experiment complete. Results written to {args.pkl_file}.")
