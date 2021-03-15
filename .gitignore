@@ -292,3 +292,7 @@ Training
 Blog
 About
 .vscode/*
+multinli_1.0/
+intentional.txt
+newstest2014-fren-ref.fr.sgm
+newstest2014-fren-src.en.sgm
