@@ -24,6 +24,8 @@ try:
   ZWSP = chr(0x200B)
   # Zero width joiner
   ZWJ = chr(0x200D)
+  # Zero width non-joiner
+  ZWNJ = chr(0x200C)
   # Unicode Bidi override characters
   PDF = chr(0x202C)
   LRE = chr(0x202A)
@@ -141,7 +143,7 @@ class Objective(ABC):
 class InvisibleCharacterObjective(Objective):
   """Class representing an Objective which injects invisible characters."""
 
-  def __init__(self, model: GeneratorHubInterface, input: str, ref_translation: str, max_perturbs: int = 25, invisible_chrs: List[str] = [ZWJ,ZWSP], distance: Callable[[str,str],int] = levenshtein.distance, **kwargs):
+  def __init__(self, model: GeneratorHubInterface, input: str, ref_translation: str, max_perturbs: int = 25, invisible_chrs: List[str] = [ZWJ,ZWSP,ZWNJ], distance: Callable[[str,str],int] = levenshtein.distance, **kwargs):
     super().__init__(model, input, ref_translation, max_perturbs, distance)
     self.invisible_chrs: List[str] = invisible_chrs
 
@@ -295,7 +297,7 @@ class MnliObjective():
 
 class InvisibleCharacterMnliObjective(MnliObjective, InvisibleCharacterObjective):
   
-  def __init__(self, model: GeneratorHubInterface, input: str, hypothesis: str, label:int, max_perturbs: int = 10, invisible_chrs: List[str] = [ZWJ,ZWSP], **kwargs):
+  def __init__(self, model: GeneratorHubInterface, input: str, hypothesis: str, label:int, max_perturbs: int = 10, invisible_chrs: List[str] = [ZWJ,ZWSP,ZWNJ], **kwargs):
     super().__init__(model, input, hypothesis, label, max_perturbs)
     self.invisible_chrs = invisible_chrs
 
@@ -388,7 +390,7 @@ class MnliTargetedObjective(MnliObjective):
 
 class InvisibleCharacterTargetedMnliObjective(MnliTargetedObjective, InvisibleCharacterObjective):
   
-  def __init__(self, model: GeneratorHubInterface, input: str, hypothesis: str, label:int, target: int, max_perturbs: int = 10, invisible_chrs: List[str] = [ZWJ,ZWSP], **kwargs):
+  def __init__(self, model: GeneratorHubInterface, input: str, hypothesis: str, label:int, target: int, max_perturbs: int = 10, invisible_chrs: List[str] = [ZWJ,ZWSP,ZWNJ], **kwargs):
     super().__init__(model, input, hypothesis, label, target, max_perturbs)
     self.invisible_chrs = invisible_chrs
 
