@@ -510,55 +510,67 @@ def load_source(num_examples):
     source_doc = BeautifulSoup(f, 'html.parser')
   with open('newstest2014-fren-ref.fr.sgm', 'r') as f:
     target_doc = BeautifulSoup(f, 'html.parser')
-  i = 0
   for doc in source_doc.find_all('doc'):
-    if i < num_examples:
-      source[str(doc['docid'])] = dict()
-      for seg in doc.find_all('seg'):
-        if i < num_examples:
-          source[str(doc['docid'])][str(seg['id'])] = str(seg.string)
-          i += 1
+    source[str(doc['docid'])] = dict()
+    for seg in doc.find_all('seg'):
+      source[str(doc['docid'])][str(seg['id'])] = str(seg.string)
   for docid, doc in source.items():
     target[docid] = dict()
     for segid in doc:
       node = target_doc.select_one(f'doc[docid="{docid}"] > seg[id="{segid}"]')
       target[docid][segid] = str(node.string)
-  return source, target, i
+  # Sort the examples in order of length to improve runtime
+  source_list = []
+  target_list = []
+  for docid, doc in source.items():
+    for segid, seg in doc.items():
+      source_list.append({ docid: { segid: seg }})
+  source_list.sort(key=lambda x: len(str(list(list(x.values())[0].values())[0])))
+  source_list = source_list[:num_examples]
+  for example in source_list:
+    for docid, doc in example.items():
+      for segid, seg in doc.items():
+        target_list.append({ docid: { segid: target[docid][segid] }})
+  return source_list, target_list, len(source_list)
 
 def experiment(model, objective, source, target, min_perturb, max_perturb, file, maxiter, popsize, n_examples, label):
   perturbs = { label: { '0': dict() } }
-  for docid, doc in source.items():
-    perturbs[label]['0'][docid] = {}
-    for segid, seg in doc.items():
-      ref = target[docid][segid]
-      output = model.translate(seg)
-      perturbs[label]['0'][docid][segid] = {
-            'adv_example': seg,
-            'adv_example_enc': [],
-            'input_translation_distance': levenshtein.distance(seg, seg),
-            'ref_translation_distance': levenshtein.distance(seg, ref),
-            'input': seg,
-            'input_translation': output,
-            'adv_translation': output,
-            'ref_translation': ref,
-            'ref_bleu': corpus_bleu(seg, ref).score,
-            'input_bleu': corpus_bleu(seg, seg).score,
-            'adv_generation_time': 0,
-            'budget': 0,
-            'maxiter': maxiter,
-            'popsize': popsize
-          }
+  for i, example in enumerate(source):
+    for docid, doc in example.items():
+      if docid not in perturbs[label]['0']:
+        perturbs[label]['0'][docid] = dict()
+      for segid, seg in doc.items():
+        ref = target[i][docid][segid]
+        output = model.translate(seg)
+        perturbs[label]['0'][docid][segid] = {
+              'adv_example': seg,
+              'adv_example_enc': [],
+              'input_translation_distance': levenshtein.distance(seg, seg),
+              'ref_translation_distance': levenshtein.distance(seg, ref),
+              'input': seg,
+              'input_translation': output,
+              'adv_translation': output,
+              'ref_translation': ref,
+              'ref_bleu': corpus_bleu(seg, ref).score,
+              'input_bleu': corpus_bleu(seg, seg).score,
+              'adv_generation_time': 0,
+              'budget': 0,
+              'maxiter': maxiter,
+              'popsize': popsize
+            }
   with tqdm(total=n_examples*(max_perturb-min_perturb+1), desc="Adv. Examples") as pbar:
     for i in range(min_perturb, max_perturb+1):
       perturbs[label][str(i)] = dict()
-      for docid, doc in source.items():
-        perturbs[label][str(i)][docid] = dict()
-        for segid, seg in doc.items():
-          ref = target[docid][segid]
-          perturbs[label][str(i)][docid][segid] = objective(en2fr, seg, ref, max_perturbs=i).differential_evolution(maxiter=maxiter, popsize=popsize)
-          with open(file, 'wb') as f:
-            pickle.dump(perturbs, f)
-          pbar.update(1)
+      for j, example in enumerate(source):
+        for docid, doc in example.items():
+          if docid not in perturbs[label][str(i)]:
+            perturbs[label][str(i)][docid] = dict()
+          for segid, seg in doc.items():
+            ref = target[j][docid][segid]
+            perturbs[label][str(i)][docid][segid] = objective(en2fr, seg, ref, max_perturbs=i).differential_evolution(maxiter=maxiter, popsize=popsize)
+            with open(file, 'wb') as f:
+              pickle.dump(perturbs, f)
+            pbar.update(1)
 
 def mnli_experiment(model, objective, data, file, min_budget, max_budget, maxiter, popsize, exp_label):
   perturbs = { exp_label: { '0': dict() } }
@@ -685,7 +697,7 @@ if __name__ == '__main__':
   parser.add_argument('-n', '--num-examples', type=int, default=250, help="Number of adversarial examples to generate.")
   parser.add_argument('-l', '--min-perturbs', type=int, default=1, help="The lower bound (inclusive) of the perturbation budget range.")
   parser.add_argument('-u', '--max-perturbs', type=int, default=5, help="The upper bound (inclusive) of the perturbation budget range.")
-  parser.add_argument('-a', '--maxiter', type=int, default=10, help="The maximum number of iterations in the genetic algorithm.")
+  parser.add_argument('-a', '--maxiter', type=int, default=3, help="The maximum number of iterations in the genetic algorithm.")
   parser.add_argument('-p', '--popsize', type=int, default=32, help="The size of the population in he genetic algorithm.")
   targeted = parser.add_mutually_exclusive_group()
   targeted.add_argument('-x', '--targeted', action='store_true', help="Perform a targeted attack.")
