@@ -739,7 +739,7 @@ if __name__ == '__main__':
   task.add_argument('-m', '--mnli', action='store_true', help="Target MNLI task (Roberta).")
   parser.add_argument('-c', '--cpu', action='store_true', default=True, help="Use CPU for ML inference instead of CUDA.")
   parser.add_argument('pkl_file', help="File to contain Python pickled output.")
-  parser.add_argument('-n', '--num-examples', type=int, default=250, help="Number of adversarial examples to generate.")
+  parser.add_argument('-n', '--num-examples', type=int, default=200, help="Number of adversarial examples to generate.")
   parser.add_argument('-l', '--min-perturbs', type=int, default=1, help="The lower bound (inclusive) of the perturbation budget range.")
   parser.add_argument('-u', '--max-perturbs', type=int, default=5, help="The upper bound (inclusive) of the perturbation budget range.")
   parser.add_argument('-a', '--maxiter', type=int, default=3, help="The maximum number of iterations in the genetic algorithm.")
