@@ -15,9 +15,15 @@ try:
   from tqdm.auto import tqdm, trange
   from argparse import ArgumentParser
   from sacrebleu import corpus_bleu
-  from time import process_time, sleep
+  from time import process_time, sleep, time
   from torch.nn.functional import softmax
   from os.path import exists
+  import pandas as pd
+  from toxic.core.model import ModelWrapper
+  from logging import getLogger, WARNING
+  from googleapiclient.discovery_cache.base import Cache
+  from googleapiclient import discovery
+  from getpass import getpass
 
   # --- Constants ---
 
@@ -43,7 +49,7 @@ try:
   # Carriage return character
   CR = chr(0xD)
 
-  # Retrieve Unicode Intentional homoglyph characters
+  # Load Unicode Intentional homoglyph characters
   intentionals = dict()
   with open("intentional.txt", "r") as f:
     for line in f.readlines():
@@ -63,10 +69,23 @@ try:
       if line['gold_label'] in label_map:
         mnli_test.append(line)
 
+  # Load toxic comments data set
+  getLogger('numexpr.utils').setLevel(WARNING)
+  comments = pd.read_csv('toxicity_annotated_comments.tsv', sep = '\t', index_col = 0)
+  annotations = pd.read_csv('toxicity_annotations.tsv',  sep = '\t')
+  # labels a comment as toxic if the majority of annoatators did so
+  labels = annotations.groupby('rev_id')['toxicity'].mean() > 0.5
+  # join labels and comments
+  comments['toxicity'] = labels
+  # remove newline and tab tokens
+  comments['comment'] = comments['comment'].apply(lambda x: x.replace("NEWLINE_TOKEN", " "))
+  comments['comment'] = comments['comment'].apply(lambda x: x.replace("TAB_TOKEN", " "))
+  test_comments = comments.query("split=='test'").query("toxicity==True")
+  examples = test_comments.reset_index().to_dict('records')
+
 except Exception as ex:
   print("Unable to initiate. Please ensure that you have already run `setup.sh` in this environment.")
-  # sys.exit(ex)
-  raise ex
+  sys.exit(ex)
 
 
 # --- Classes ---
@@ -454,6 +473,351 @@ class DeletionTargetedMnliNoLogitsObjective(MnliTargetedNoLogitsObjective, Delet
   pass
 
 
+class ToxicObjective(ABC):
+  """ Toxic content filter objective. """
+
+  def __init__(self, model, input: str, annotated_toxic: bool, max_perturbs: int):
+    if not model:
+      raise ValueError("Must supply model.")
+    if not input:
+      raise ValueError("Must supply input.")
+
+    self.model = model
+    self.input: str = input
+    self.annotated_toxic: bool = annotated_toxic
+    self.max_perturbs: int = max_perturbs
+    self.output = self.model.predict([self.input])[0]
+
+  def objective(self) -> Callable[[List[float]], float]:
+    def _objective(perturbations: List[float]) -> float:
+      candidate: str = self.candidate(perturbations)
+      predicts: str = self.model.predict([candidate])[0]
+      return sum(predicts.values())
+    return _objective
+
+  def differential_evolution(self, print_result=True, verbose=True, maxiter=60, popsize=32, polish=False, full_results=False) -> str:
+    start = process_time()
+    result = differential_evolution(self.objective(), self.bounds(),
+                                    disp=verbose, maxiter=maxiter,
+                                    popsize=popsize, polish=polish)
+    end = process_time()
+    candidate = self.candidate(result.x)
+    adv_output = self.model.predict([candidate])[0]
+    if (print_result):
+      print(f"Result: {candidate}")
+      print(f"Result Predictions: {adv_output}")
+      print(f"Input: {self.input}")
+      print(f"Input Predictions: {self.output}")
+    if full_results:
+      return {
+            'adv_example': candidate,
+            'adv_example_enc': result.x,
+            'input': self.input,
+            'annotated_toxic': self.annotated_toxic,
+            'adv_predictions': adv_output,
+            'input_prediction': self.output,
+            'adv_predictions_sum': sum(adv_output.values()),
+            'input_prediction_sum': sum(self.output.values()),
+            'adv_toxic': adv_output['toxic'] > 0.5,
+            'input_toxic': self.output['toxic'] > 0.5,
+            'input_annotated_correct': (self.output['toxic'] > 0.5) == self.annotated_toxic,
+            'adv_generation_time': end - start,
+            'budget': self.max_perturbs,
+            'maxiter': maxiter,
+            'popsize': popsize
+          }
+    return candidate
+
+  def bounds(self) -> List[Tuple[float, float]]:
+    raise NotImplementedError()
+
+  def candidate(self, perturbations: List[float]) -> str:
+    raise NotImplementedError()
+
+
+class InvisibleToxicObjective(ToxicObjective):
+  """Class representing a Toxic Objective which injects invisible characters."""
+
+  def __init__(self, model, input: str, annotated_toxic: bool, max_perturbs: int = 25, invisible_chrs: List[str] = [ZWJ,ZWSP,ZWNJ], **kwargs):
+    super().__init__(model, input, annotated_toxic, max_perturbs)
+    self.invisible_chrs: List[str] = invisible_chrs
+
+  def bounds(self) -> List[Tuple[float, float]]:
+    return [(0,len(self.invisible_chrs)-1), (-1, len(self.input)-1)] * self.max_perturbs
+
+  def candidate(self, perturbations: List[float]) -> str:
+    candidate = [char for char in self.input]
+    for i in range(0, len(perturbations), 2):
+      inp_index = natural(perturbations[i+1])
+      if inp_index >= 0:
+        inv_char = self.invisible_chrs[natural(perturbations[i])]
+        candidate = candidate[:inp_index] + [inv_char] + candidate[inp_index:]
+    return ''.join(candidate)
+
+
+class HomoglyphToxicObjective(ToxicObjective):
+  """Class representing a Toxic Objective which injects homoglyphs."""
+
+  def __init__(self, model, input: str, annotated_toxic: bool, max_perturbs: int = 25, homoglyphs: Dict[str,List[str]] = intentionals, **kwargs):
+    super().__init__(model, input, annotated_toxic, max_perturbs)
+    self.homoglyphs = homoglyphs
+    self.glyph_map = []
+    for i, char in enumerate(self.input):
+      if char in self.homoglyphs:
+        charmap = self.homoglyphs[char]
+        charmap = list(zip([i] * len(charmap), charmap))
+        self.glyph_map.extend(charmap)
+
+  def bounds(self) -> List[Tuple[float, float]]:
+    return [(-1, len(self.glyph_map)-1)] * self.max_perturbs
+
+  def candidate(self, perturbations: List[float]) -> str:
+    candidate = [char for char in self.input]  
+    for perturb in map(natural, perturbations):
+      if perturb >= 0:
+        i, char = self.glyph_map[perturb]
+        candidate[i] = char
+    return ''.join(candidate)
+
+
+class ReorderToxicObjective(ToxicObjective):
+  """Class representing a Toxic Objective which injects homoglyphs."""
+
+  def __init__(self, model, input: str, annotated_toxic: bool, max_perturbs: int = 25, **kwargs):
+    super().__init__(model, input, annotated_toxic, max_perturbs)
+
+  def bounds(self) -> List[Tuple[float, float]]:
+    return [(-1,len(self.input)-1)] * self.max_perturbs
+
+  def candidate(self, perturbations: List[float]) -> str:
+    def swaps(els) -> str:
+      res = ""
+      for el in els:
+          if isinstance(el, Swap):
+              res += swaps([LRO, LRI, RLO, LRI, el.one, PDI, LRI, el.two, PDI, PDF, PDI, PDF])
+          elif isinstance(el, str):
+              res += el
+          else:
+              for subel in el:
+                  res += swaps([subel])
+      return res
+
+    _candidate = [char for char in self.input]
+    for perturb in map(natural, perturbations):
+      if perturb >= 0 and len(_candidate) >= 2:
+        perturb = min(perturb, len(_candidate) - 2)
+        _candidate = _candidate[:perturb] + [Swap(_candidate[perturb+1], _candidate[perturb])] + _candidate[perturb+2:]
+
+    return swaps(_candidate)
+
+
+class DeletionToxicObjective(ToxicObjective):
+  """Class representing a Toxic Objective which injects homoglyphs."""
+
+  def __init__(self, model, input: str, annotated_toxic: bool, max_perturbs: int = 25, del_chr: str = BKSP, ins_chr_min: str = '!', ins_chr_max: str = '~', **kwargs):
+    super().__init__(model, input, annotated_toxic, max_perturbs)
+    self.del_chr = del_chr
+    self.ins_chr_min: str = ins_chr_min
+    self.ins_chr_max: str = ins_chr_max
+
+  def bounds(self) -> List[Tuple[float, float]]:
+    return [(-1,len(self.input)-1), (ord(self.ins_chr_min),ord(self.ins_chr_max))] * self.max_perturbs
+
+  def candidate(self, perturbations: List[float]) -> str:
+    candidate = [char for char in self.input]
+    for i in range(0, len(perturbations), 2):
+      idx = natural(perturbations[i])
+      char = chr(natural(perturbations[i+1]))
+      candidate = candidate[:idx] + [char, self.del_chr] + candidate[idx:]
+      for j in range(i,len(perturbations), 2):
+        perturbations[j] += 2
+    return ''.join(candidate)
+
+
+class ToxicPerspectiveObjective(ABC):
+  """Class representing attacks against Google's toxic language Perspective API."""
+
+  def __init__(self, client, input: str, rate_limit: int, max_perturbs: int, annotated_toxic: bool):
+    if not client:
+      raise ValueError("Must supply client.")
+    if not input:
+      raise ValueError("Must supply input.")
+
+    self.client = client
+    self.input: str = input
+    # Perspective API rate limit in seconds
+    self.rate_limit: float = 1 / rate_limit + .005
+    self.max_perturbs: int = max_perturbs
+    self.annotated_toxic = annotated_toxic
+    self.last_request = time()
+    self.output = self.request(input)
+
+  def request(self, candidate: str):
+    delta = time() - self.last_request
+    if delta < self.rate_limit:
+      sleep(self.rate_limit - delta)
+    self.last_request = time()
+    analyze_request = {
+        'comment': { 'text': candidate },
+        'requestedAttributes': {'TOXICITY': {}},
+        'languages': 'en',
+      }
+    response = self.client.comments().analyze(body=analyze_request).execute()
+    return response['attributeScores']['TOXICITY']['summaryScore']['value']
+
+  def objective(self) -> Callable[[List[float]], float]:
+    def _objective(perturbations: List[float]) -> float:
+      candidate: str = self.candidate(perturbations)
+      return self.request(candidate)
+    return _objective
+    
+  def differential_evolution(self, print_result=True, verbose=True, maxiter=60, popsize=32, polish=False, full_results=False) -> str:
+    start = process_time()
+    result = differential_evolution(self.objective(), self.bounds(),
+                                    disp=verbose, maxiter=maxiter,
+                                    popsize=popsize, polish=polish)
+    end = process_time()
+    candidate = self.candidate(result.x)
+    adv_output = self.request(candidate)
+    if (print_result):
+      print(f"Result: {candidate}")
+      print(f"Result Predictions: {adv_output}")
+      print(f"Input: {self.input}")
+      print(f"Input Predictions: {self.output}")
+    if full_results:
+      return {
+            'adv_example': candidate,
+            'adv_example_enc': result.x,
+            'input': self.input,
+            'annotated_toxic': self.annotated_toxic,
+            'adv_predictions': adv_output,
+            'input_prediction': self.output,
+            'adv_toxic': adv_output > 0.5,
+            'input_toxic': self.output > 0.5,
+            'input_annotated_correct': (self.output > 0.5) == self.annotated_toxic,
+            'adv_generation_time': end - start,
+            'budget': self.max_perturbs,
+            'maxiter': maxiter,
+            'popsize': popsize
+          }
+    return candidate
+
+  def bounds(self) -> List[Tuple[float, float]]:
+    raise NotImplementedError()
+
+  def candidate(self, perturbations: List[float]) -> str:
+    raise NotImplementedError()
+
+
+class InvisibleToxicPerspectiveObjective(ToxicPerspectiveObjective):
+  """Class representing a Toxic Perspective API Objective which injects invisible characters."""
+
+  def __init__(self, client, input: str, rate_limit: int, annotated_toxic: bool, max_perturbs: int = 25, invisible_chrs: List[str] = [ZWJ,ZWSP,ZWNJ], **kwargs):
+    super().__init__(client, input, rate_limit, max_perturbs, annotated_toxic)
+    self.invisible_chrs: List[str] = invisible_chrs
+
+  def bounds(self) -> List[Tuple[float, float]]:
+    return [(0,len(self.invisible_chrs)-1), (-1, len(self.input)-1)] * self.max_perturbs
+
+  def candidate(self, perturbations: List[float]) -> str:
+    candidate = [char for char in self.input]
+    for i in range(0, len(perturbations), 2):
+      inp_index = natural(perturbations[i+1])
+      if inp_index >= 0:
+        inv_char = self.invisible_chrs[natural(perturbations[i])]
+        candidate = candidate[:inp_index] + [inv_char] + candidate[inp_index:]
+    return ''.join(candidate)
+
+
+class HomoglyphToxicPerspectiveObjective(ToxicPerspectiveObjective):
+  """Class representing a Toxic Perspective API Objective which injects homoglyphs."""
+
+  def __init__(self, client, input: str, rate_limit: int, annotated_toxic: bool, max_perturbs: int = 25, homoglyphs: Dict[str,List[str]] = intentionals, **kwargs):
+    super().__init__(client, input, rate_limit, max_perturbs, annotated_toxic)
+    self.homoglyphs = homoglyphs
+    self.glyph_map = []
+    for i, char in enumerate(self.input):
+      if char in self.homoglyphs:
+        charmap = self.homoglyphs[char]
+        charmap = list(zip([i] * len(charmap), charmap))
+        self.glyph_map.extend(charmap)
+
+  def bounds(self) -> List[Tuple[float, float]]:
+    return [(-1, len(self.glyph_map)-1)] * self.max_perturbs
+
+  def candidate(self, perturbations: List[float]) -> str:
+    candidate = [char for char in self.input]  
+    for perturb in map(natural, perturbations):
+      if perturb >= 0:
+        i, char = self.glyph_map[perturb]
+        candidate[i] = char
+    return ''.join(candidate)
+
+
+class ReorderToxicPerspectiveObjective(ToxicPerspectiveObjective):
+  """Class representing a Toxic Perspective API Objective which injects reorderings."""
+
+  def __init__(self, client, input: str, rate_limit: int, annotated_toxic: bool, max_perturbs: int = 25, **kwargs):
+    super().__init__(client, input, rate_limit, max_perturbs, annotated_toxic)
+
+  def bounds(self) -> List[Tuple[float, float]]:
+    return [(-1,len(self.input)-1)] * self.max_perturbs
+
+  def candidate(self, perturbations: List[float]) -> str:
+    def swaps(els) -> str:
+      res = ""
+      for el in els:
+          if isinstance(el, Swap):
+              res += swaps([LRO, LRI, RLO, LRI, el.one, PDI, LRI, el.two, PDI, PDF, PDI, PDF])
+          elif isinstance(el, str):
+              res += el
+          else:
+              for subel in el:
+                  res += swaps([subel])
+      return res
+
+    _candidate = [char for char in self.input]
+    for perturb in map(natural, perturbations):
+      if perturb >= 0 and len(_candidate) >= 2:
+        perturb = min(perturb, len(_candidate) - 2)
+        _candidate = _candidate[:perturb] + [Swap(_candidate[perturb+1], _candidate[perturb])] + _candidate[perturb+2:]
+
+    return swaps(_candidate)
+
+
+class DeletionToxicPerspectiveObjective(ToxicPerspectiveObjective):
+  """Class representing a Toxic Perspective API Objective which injects deletions."""
+
+  def __init__(self, client, input: str, rate_limit: int, annotated_toxic: bool, max_perturbs: int = 25, del_chr: str = BKSP, ins_chr_min: str = '!', ins_chr_max: str = '~', **kwargs):
+    super().__init__(client, input, rate_limit, max_perturbs, annotated_toxic)
+    self.del_chr = del_chr
+    self.ins_chr_min: str = ins_chr_min
+    self.ins_chr_max: str = ins_chr_max
+
+  def bounds(self) -> List[Tuple[float, float]]:
+    return [(-1,len(self.input)-1), (ord(self.ins_chr_min),ord(self.ins_chr_max))] * self.max_perturbs
+
+  def candidate(self, perturbations: List[float]) -> str:
+    candidate = [char for char in self.input]
+    for i in range(0, len(perturbations), 2):
+      idx = natural(perturbations[i])
+      char = chr(natural(perturbations[i+1]))
+      candidate = candidate[:idx] + [char, self.del_chr] + candidate[idx:]
+      for j in range(i,len(perturbations), 2):
+        perturbations[j] += 2
+    return ''.join(candidate)
+
+
+class MemoryCache(Cache):
+    _CACHE = {}
+
+    def get(self, url):
+        return MemoryCache._CACHE.get(url)
+
+    def set(self, url, content):
+        MemoryCache._CACHE[url] = content
+
+
 # --- Helper Functions ---
 
 def some(*els):
@@ -695,6 +1059,100 @@ def mnli_targeted_experiment(objective, model, inputs, file, min_budget, max_bud
             sleep(0.1)
           pbar.update(1)
 
+def max_toxic_experiment(objective, model, file, min_budget, max_budget, examples, maxiter, popsize, exp_label, overwrite):
+  if overwrite or not exists(file):
+    perturbs = { exp_label: { '0': dict() } }
+  else:
+    with open(file, 'rb') as f:
+      perturbs = pickle.load(f)
+    if exp_label not in perturbs:
+      perturbs[exp_label] = dict()
+    if '0' not in perturbs[exp_label]:
+      perturbs[exp_label]['0'] = dict()
+  for example in examples:
+    if example['rev_id'] not in perturbs[exp_label]['0']:
+      probs = model.predict([example['comment']])[0]
+      perturbs[exp_label]['0'][example['rev_id']] = {
+              'adv_example': example['comment'],
+              'adv_example_enc': [],
+              'input': example['comment'],
+              'annotated_toxic': example['toxicity'],
+              'adv_predictions': probs,
+              'input_prediction': probs,
+              'adv_predictions_sum': sum(probs.values()),
+              'input_prediction_sum': sum(probs.values()),
+              'adv_toxic': probs['toxic'] > 0.5,
+              'input_toxic': probs['toxic'] > 0.5,
+              'input_annotated_correct': (probs['toxic'] > 0.5) == example['toxicity'],
+              'adv_generation_time': 0,
+              'budget': 0,
+              'maxiter': maxiter,
+              'popsize': popsize
+            }
+  with tqdm(total=len(examples)*(max_budget-min_budget+1), desc="Adv. Examples") as pbar:
+    for budget in range(min_budget, max_budget+1):
+      if str(budget) not in perturbs[exp_label]:
+        perturbs[exp_label][str(budget)] = dict()
+      for example in examples:
+        if example['rev_id'] not in perturbs[exp_label][str(budget)]:
+          obj = objective(model, example['comment'], example['toxicity'], budget)
+          result = obj.differential_evolution(verbose=False, print_result=False, maxiter=maxiter, popsize=popsize, full_results=True)
+          perturbs[exp_label][str(budget)][example['rev_id']] = result
+          with open(file, 'wb') as f:
+            pickle.dump(perturbs, f)
+        else:
+          # Required for progress bar to update correctly
+          sleep(0.1)
+        pbar.update(1)
+
+from tqdm.auto import tqdm
+import pickle
+
+def perspective_experiment(objective, client, file, min_budget, max_budget, examples, maxiter, popsize, exp_label, overwrite, rate_limit):
+  if overwrite or not exists(file):
+    perturbs = { exp_label: { '0': dict() } }
+  else:
+    with open(file, 'rb') as f:
+      perturbs = pickle.load(f)
+    if exp_label not in perturbs:
+      perturbs[exp_label] = dict()
+    if '0' not in perturbs[exp_label]:
+      perturbs[exp_label]['0'] = dict()
+  obj = objective(client, "zero", rate_limit, False, 0)
+  for example in examples:
+    if example['rev_id'] not in perturbs[exp_label]['0']:
+      probs = obj.request(example['comment'])
+      perturbs[exp_label]['0'][example['rev_id']] = {
+              'adv_example': example['comment'],
+              'adv_example_enc': [],
+              'input': example['comment'],
+              'annotated_toxic': example['toxicity'],
+              'adv_predictions': probs,
+              'input_prediction': probs,
+              'adv_toxic': probs > 0.5,
+              'input_toxic': probs > 0.5,
+              'input_annotated_correct': (probs > 0.5) == example['toxicity'],
+              'adv_generation_time': 0,
+              'budget': 0,
+              'maxiter': maxiter,
+              'popsize': popsize
+            }
+  with tqdm(total=len(examples)*(max_budget-min_budget+1), desc="Adv. Examples") as pbar:
+    for budget in range(min_budget, max_budget+1):
+      if str(budget) not in perturbs[exp_label]:
+        perturbs[exp_label][str(budget)] = dict()
+      for example in examples:
+        if example['rev_id'] not in perturbs[exp_label][str(budget)]:
+          obj = objective(client, example['comment'], rate_limit, example['toxicity'], budget)
+          result = obj.differential_evolution(verbose=False, print_result=False, maxiter=maxiter, popsize=popsize, full_results=True)
+          perturbs[exp_label][str(budget)][example['rev_id']] = result
+          with open(file, 'wb') as f:
+            pickle.dump(perturbs, f)
+        else:
+          # Required for progress bar to update correctly
+          sleep(0.1)
+        pbar.update(1)
+
 def load_en2fr(cpu):
   # Load pre-trained translation model
   print("Loading EN->FR translation model.")
@@ -723,6 +1181,22 @@ def load_mnli(cpu):
   print("Model loaded successfully.")
   return mnli
 
+def load_maxtoxic(cpu):
+  getLogger().setLevel(WARNING)
+  toxic = ModelWrapper()
+  if not cpu:
+    toxic.model.cuda()
+    toxic.device = torch.device("cuda")
+  return toxic
+
+def load_perspective(api_key):
+  return discovery.build(
+    "commentanalyzer",
+    "v1alpha1",
+    developerKey=api_key,
+    discoveryServiceUrl="https://commentanalyzer.googleapis.com/$discovery/rest?version=v1alpha1",
+    cache=MemoryCache()
+  )
 
 # -- CLI ---
 
@@ -737,6 +1211,8 @@ if __name__ == '__main__':
   task = parser.add_mutually_exclusive_group(required=True)
   task.add_argument('-t', '--translation', action='store_true', help="Target translation task (EN->FR).")
   task.add_argument('-m', '--mnli', action='store_true', help="Target MNLI task (Roberta).")
+  task.add_argument('-T', '--max-toxic', action='store_true', help="Target IBM Max Toxic model for toxic content.")
+  task.add_argument('-P', '--perspective', action='store_true', help="Target Google Perspective API for toxic content.")
   parser.add_argument('-c', '--cpu', action='store_true', default=True, help="Use CPU for ML inference instead of CUDA.")
   parser.add_argument('pkl_file', help="File to contain Python pickled output.")
   parser.add_argument('-n', '--num-examples', type=int, default=200, help="Number of adversarial examples to generate.")
@@ -745,6 +1221,7 @@ if __name__ == '__main__':
   parser.add_argument('-a', '--maxiter', type=int, default=3, help="The maximum number of iterations in the genetic algorithm.")
   parser.add_argument('-p', '--popsize', type=int, default=32, help="The size of the population in he genetic algorithm.")
   parser.add_argument('-o', '--overwrite', action='store_true', help="Overwrite existing results file instead of resuming.")
+  parser.add_argument('-R', '--rate-limit', type=int, default=10, help="The rate limit with which to throttle requests against the Google Perspective API.")
   targeted = parser.add_mutually_exclusive_group()
   targeted.add_argument('-x', '--targeted', action='store_true', help="Perform a targeted attack.")
   targeted.add_argument('-X', '--targeted-no-logits', action='store_true', help="Perform a targeted attack without access to inference result logits.")
@@ -842,5 +1319,54 @@ if __name__ == '__main__':
         label = "mnli_deletions_untargeted"
 
       mnli_experiment(mnli, objective, data, args.pkl_file, args.min_perturbs, args.max_perturbs, args.maxiter, args.popsize, label, args.overwrite)
+
+  elif args.max_toxic:
+    maxtoxic = load_maxtoxic(args.cpu)
+    data = examples[:args.num_examples]
+    print(f"Loaded {len(data)} strings from corpus.")
+
+    if args.invisible_chars:
+      print(f"Starting invisible characters Max Toxic experiment.")
+      objective = InvisibleToxicObjective
+      label = "maxtoxic_invisibles"
+    elif args.homoglyphs:
+      print(f"Starting homoglyphs Max Toxic experiment.")
+      objective = HomoglyphToxicObjective
+      label = "maxtoxic_homoglyphs"
+    elif args.reorderings:
+      print(f"Starting reorderings Max Toxic experiment.")
+      objective = ReorderToxicObjective
+      label = "maxtoxic_reorderings"
+    elif args.deletions:
+      print(f"Starting deletions Max Toxic experiment.")
+      objective = DeletionToxicObjective
+      label = "maxtoxic_deletions"
+
+    max_toxic_experiment(objective, maxtoxic, args.pkl_file, args.min_perturbs, args.max_perturbs, data, args.maxiter, args.popsize, label, args.overwrite)
+
+  elif args.perspective:
+    api_key = getpass("Perspective API Key: ")
+    perspetive = load_perspective(api_key)
+    data = examples[:args.num_examples]
+    print(f"Loaded {len(data)} strings from corpus.")
+
+    if args.invisible_chars:
+      print(f"Starting invisible characters Perspective API experiment.")
+      objective = InvisibleToxicPerspectiveObjective
+      label = "perspective_invisibles"
+    elif args.homoglyphs:
+      print(f"Starting homoglyphs Perspective API experiment.")
+      objective = HomoglyphToxicPerspectiveObjective
+      label = "perspective_homoglyphs"
+    elif args.reorderings:
+      print(f"Starting reorderings Perspective API experiment.")
+      objective = ReorderToxicPerspectiveObjective
+      label = "perspective_reorderings"
+    elif args.deletions:
+      print(f"Starting deletions Perspective API experiment.")
+      objective = DeletionToxicPerspectiveObjective
+      label = "perspective_deletions"
+
+    perspective_experiment(objective, perspetive, args.pkl_file, args.min_perturbs, args.max_perturbs, data, args.maxiter, args.popsize, label, args.overwrite, args.rate_limit)
 
 print(f"Experiment complete. Results written to {args.pkl_file}.")
