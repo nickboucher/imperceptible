@@ -1105,9 +1105,6 @@ def max_toxic_experiment(objective, model, file, min_budget, max_budget, example
           sleep(0.1)
         pbar.update(1)
 
-from tqdm.auto import tqdm
-import pickle
-
 def perspective_experiment(objective, client, file, min_budget, max_budget, examples, maxiter, popsize, exp_label, overwrite, rate_limit):
   if overwrite or not exists(file):
     perturbs = { exp_label: { '0': dict() } }
@@ -1213,7 +1210,7 @@ if __name__ == '__main__':
   task.add_argument('-m', '--mnli', action='store_true', help="Target MNLI task (Roberta).")
   task.add_argument('-T', '--max-toxic', action='store_true', help="Target IBM Max Toxic model for toxic content.")
   task.add_argument('-P', '--perspective', action='store_true', help="Target Google Perspective API for toxic content.")
-  parser.add_argument('-c', '--cpu', action='store_true', default=True, help="Use CPU for ML inference instead of CUDA.")
+  parser.add_argument('-c', '--cpu', action='store_true', default=False, help="Use CPU for ML inference instead of CUDA.")
   parser.add_argument('pkl_file', help="File to contain Python pickled output.")
   parser.add_argument('-n', '--num-examples', type=int, default=200, help="Number of adversarial examples to generate.")
   parser.add_argument('-l', '--min-perturbs', type=int, default=1, help="The lower bound (inclusive) of the perturbation budget range.")
