@@ -1218,14 +1218,14 @@ if __name__ == '__main__':
   parser.add_argument('-a', '--maxiter', type=int, default=3, help="The maximum number of iterations in the genetic algorithm.")
   parser.add_argument('-p', '--popsize', type=int, default=32, help="The size of the population in he genetic algorithm.")
   parser.add_argument('-o', '--overwrite', action='store_true', help="Overwrite existing results file instead of resuming.")
-  parser.add_argument('-R', '--rate-limit', type=int, default=10, help="The rate limit with which to throttle requests against the Google Perspective API.")
+  parser.add_argument('-R', '--rate-limit', type=int, default=10, help="The rate limit with which to throttle requests against the Google Perspective API (in QPS).")
   targeted = parser.add_mutually_exclusive_group()
   targeted.add_argument('-x', '--targeted', action='store_true', help="Perform a targeted attack.")
   targeted.add_argument('-X', '--targeted-no-logits', action='store_true', help="Perform a targeted attack without access to inference result logits.")
   args = parser.parse_args()
 
   if args.translation:
-    if args.targeted:
+    if args.targeted or args.targeted_no_logits:
       print("Targeted attacks for translation do not exist.")
       sys.exit(1)
 
@@ -1318,6 +1318,10 @@ if __name__ == '__main__':
       mnli_experiment(mnli, objective, data, args.pkl_file, args.min_perturbs, args.max_perturbs, args.maxiter, args.popsize, label, args.overwrite)
 
   elif args.max_toxic:
+    if args.targeted or args.targeted_no_logits:
+      print("Targeted attacks for Max Toxic have not been implemented.")
+      sys.exit(1)
+
     maxtoxic = load_maxtoxic(args.cpu)
     data = examples[:args.num_examples]
     print(f"Loaded {len(data)} strings from corpus.")
@@ -1342,6 +1346,10 @@ if __name__ == '__main__':
     max_toxic_experiment(objective, maxtoxic, args.pkl_file, args.min_perturbs, args.max_perturbs, data, args.maxiter, args.popsize, label, args.overwrite)
 
   elif args.perspective:
+    if args.targeted or args.targeted_no_logits:
+      print("Targeted attacks for the Perspective API have not been implemented.")
+      sys.exit(1)
+
     api_key = getpass("Perspective API Key: ")
     perspetive = load_perspective(api_key)
     data = examples[:args.num_examples]
