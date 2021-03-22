@@ -5,6 +5,7 @@ try:
   import pickle
   import json
   import numpy as np
+  import pandas as pd
   from bs4 import BeautifulSoup
   from timeit import timeit
   from abc import ABC
@@ -18,7 +19,6 @@ try:
   from time import process_time, sleep, time
   from torch.nn.functional import softmax
   from os.path import exists
-  import pandas as pd
   from toxic.core.model import ModelWrapper
   from logging import getLogger, WARNING
   from googleapiclient.discovery_cache.base import Cache
@@ -163,7 +163,7 @@ class Objective(ABC):
 class InvisibleCharacterObjective(Objective):
   """Class representing an Objective which injects invisible characters."""
 
-  def __init__(self, model: GeneratorHubInterface, input: str, ref_translation: str, max_perturbs: int = 25, invisible_chrs: List[str] = [ZWJ,ZWSP,ZWNJ], distance: Callable[[str,str],int] = levenshtein.distance, **kwargs):
+  def __init__(self, model: GeneratorHubInterface, input: str, ref_translation: str, max_perturbs: int, invisible_chrs: List[str] = [ZWJ,ZWSP,ZWNJ], distance: Callable[[str,str],int] = levenshtein.distance):
     super().__init__(model, input, ref_translation, max_perturbs, distance)
     self.invisible_chrs: List[str] = invisible_chrs
 
@@ -182,10 +182,8 @@ class InvisibleCharacterObjective(Objective):
 
 class HomoglyphObjective(Objective):
 
-  def __init__(self, model: GeneratorHubInterface, input: str, ref_translation: str, max_perturbs=None, distance: Callable[[str,str],int] = levenshtein.distance, homoglyphs: Dict[str,List[str]] = intentionals, **kwargs):
+  def __init__(self, model: GeneratorHubInterface, input: str, ref_translation: str, max_perturbs: int, distance: Callable[[str,str],int] = levenshtein.distance, homoglyphs: Dict[str,List[str]] = intentionals):
     super().__init__(model, input, ref_translation, max_perturbs, distance)
-    if not self.max_perturbs:
-      self.max_perturbs = len(self.input)
     self.homoglyphs = homoglyphs
     self.glyph_map = []
     for i, char in enumerate(self.input):
@@ -208,7 +206,7 @@ class HomoglyphObjective(Objective):
 
 class ReorderObjective(Objective):
 
-  def __init__(self, model: GeneratorHubInterface, input: str, ref_translation: str, max_perturbs: int = 50, distance: Callable[[str,str],int] = levenshtein.distance, **kwargs):
+  def __init__(self, model: GeneratorHubInterface, input: str, ref_translation: str, max_perturbs: int, distance: Callable[[str,str],int] = levenshtein.distance):
     super().__init__(model, input, ref_translation, max_perturbs, distance)
 
   def bounds(self) -> List[Tuple[float, float]]:
@@ -239,8 +237,8 @@ class ReorderObjective(Objective):
 class DeletionObjective(Objective):
   """Class representing an Objective which injects deletion control characters."""
 
-  def __init__(self, model: GeneratorHubInterface, input: str, max_perturbs: int = 100, distance: Callable[[str,str],int] = levenshtein.distance, del_chr: str = BKSP, ins_chr_min: str = '!', ins_chr_max: str = '~', **kwargs):
-    super().__init__(model, input, max_perturbs, distance)
+  def __init__(self, model: GeneratorHubInterface, input: str, ref_translation: str, max_perturbs: int, distance: Callable[[str,str],int] = levenshtein.distance, del_chr: str = BKSP, ins_chr_min: str = '!', ins_chr_max: str = '~'):
+    super().__init__(model, input, ref_translation, max_perturbs, distance)
     self.del_chr: str = del_chr
     self.ins_chr_min: str = ins_chr_min
     self.ins_chr_max: str = ins_chr_max
@@ -317,14 +315,14 @@ class MnliObjective():
 
 class InvisibleCharacterMnliObjective(MnliObjective, InvisibleCharacterObjective):
   
-  def __init__(self, model: GeneratorHubInterface, input: str, hypothesis: str, label:int, max_perturbs: int = 10, invisible_chrs: List[str] = [ZWJ,ZWSP,ZWNJ], **kwargs):
+  def __init__(self, model: GeneratorHubInterface, input: str, hypothesis: str, label:int, max_perturbs: int, invisible_chrs: List[str] = [ZWJ,ZWSP,ZWNJ]):
     super().__init__(model, input, hypothesis, label, max_perturbs)
     self.invisible_chrs = invisible_chrs
 
 
 class HomoglyphMnliObjective(MnliObjective, HomoglyphObjective):
   
-  def __init__(self, model: GeneratorHubInterface, input: str, hypothesis: str, label:int, max_perturbs: int = 10, homoglyphs: Dict[str,List[str]] = intentionals, **kwargs):
+  def __init__(self, model: GeneratorHubInterface, input: str, hypothesis: str, label:int, max_perturbs: int, homoglyphs: Dict[str,List[str]] = intentionals):
     super().__init__(model, input, hypothesis, label, max_perturbs)
     self.homoglyphs = homoglyphs
     self.glyph_map = []
@@ -337,13 +335,13 @@ class HomoglyphMnliObjective(MnliObjective, HomoglyphObjective):
 
 class ReorderMnliObjective(MnliObjective, ReorderObjective):
   
-  def __init__(self, model: GeneratorHubInterface, input: str, hypothesis: str, label:int, max_perturbs: int = 10, **kwargs):
+  def __init__(self, model: GeneratorHubInterface, input: str, hypothesis: str, label:int, max_perturbs: int):
     super().__init__(model, input, hypothesis, label, max_perturbs)
 
 
 class DeletionMnliObjective(MnliObjective, DeletionObjective):
   
-  def __init__(self, model: GeneratorHubInterface, input: str, hypothesis: str, label:int, max_perturbs: int = 10, del_chr: str = BKSP, ins_chr_min: str = '!', ins_chr_max: str = '~', **kwargs):
+  def __init__(self, model: GeneratorHubInterface, input: str, hypothesis: str, label:int, max_perturbs: int, del_chr: str = BKSP, ins_chr_min: str = '!', ins_chr_max: str = '~'):
     super().__init__(model, input, hypothesis, label, max_perturbs)
     self.del_chr: str = del_chr
     self.ins_chr_min: str = ins_chr_min
@@ -410,14 +408,14 @@ class MnliTargetedObjective(MnliObjective):
 
 class InvisibleCharacterTargetedMnliObjective(MnliTargetedObjective, InvisibleCharacterObjective):
   
-  def __init__(self, model: GeneratorHubInterface, input: str, hypothesis: str, label:int, target: int, max_perturbs: int = 10, invisible_chrs: List[str] = [ZWJ,ZWSP,ZWNJ], **kwargs):
+  def __init__(self, model: GeneratorHubInterface, input: str, hypothesis: str, label:int, target: int, max_perturbs: int, invisible_chrs: List[str] = [ZWJ,ZWSP,ZWNJ]):
     super().__init__(model, input, hypothesis, label, target, max_perturbs)
     self.invisible_chrs = invisible_chrs
 
 
 class HomoglyphTargetedMnliObjective(MnliTargetedObjective, HomoglyphObjective):
   
-  def __init__(self, model: GeneratorHubInterface, input: str, hypothesis: str, label:int, target: int, max_perturbs: int = 10, homoglyphs: Dict[str,List[str]] = intentionals, **kwargs):
+  def __init__(self, model: GeneratorHubInterface, input: str, hypothesis: str, label:int, target: int, max_perturbs: int, homoglyphs: Dict[str,List[str]] = intentionals):
     super().__init__(model, input, hypothesis, label, target, max_perturbs)
     self.homoglyphs = homoglyphs
     self.glyph_map = []
@@ -430,13 +428,13 @@ class HomoglyphTargetedMnliObjective(MnliTargetedObjective, HomoglyphObjective):
 
 class ReorderTargetedMnliObjective(MnliTargetedObjective, ReorderObjective):
   
-  def __init__(self, model: GeneratorHubInterface, input: str, hypothesis: str, label:int, target: int, max_perturbs: int = 10, **kwargs):
+  def __init__(self, model: GeneratorHubInterface, input: str, hypothesis: str, label:int, target: int, max_perturbs: int):
     super().__init__(model, input, hypothesis, label, target, max_perturbs)
 
 
 class DeletionTargetedMnliObjective(MnliTargetedObjective, DeletionObjective):
   
-  def __init__(self, model: GeneratorHubInterface, input: str, hypothesis: str, label:int, target: int, max_perturbs: int = 10, del_chr: str = BKSP, ins_chr_min: str = '!', ins_chr_max: str = '~', **kwargs):
+  def __init__(self, model: GeneratorHubInterface, input: str, hypothesis: str, label:int, target: int, max_perturbs: int, del_chr: str = BKSP, ins_chr_min: str = '!', ins_chr_max: str = '~'):
     super().__init__(model, input, hypothesis, label, target, max_perturbs)
     self.del_chr = del_chr
     self.ins_chr_min: str = ins_chr_min
@@ -538,7 +536,7 @@ class ToxicObjective(ABC):
 class InvisibleToxicObjective(ToxicObjective):
   """Class representing a Toxic Objective which injects invisible characters."""
 
-  def __init__(self, model, input: str, annotated_toxic: bool, max_perturbs: int = 25, invisible_chrs: List[str] = [ZWJ,ZWSP,ZWNJ], **kwargs):
+  def __init__(self, model, input: str, annotated_toxic: bool, max_perturbs: int, invisible_chrs: List[str] = [ZWJ,ZWSP,ZWNJ]):
     super().__init__(model, input, annotated_toxic, max_perturbs)
     self.invisible_chrs: List[str] = invisible_chrs
 
@@ -558,7 +556,7 @@ class InvisibleToxicObjective(ToxicObjective):
 class HomoglyphToxicObjective(ToxicObjective):
   """Class representing a Toxic Objective which injects homoglyphs."""
 
-  def __init__(self, model, input: str, annotated_toxic: bool, max_perturbs: int = 25, homoglyphs: Dict[str,List[str]] = intentionals, **kwargs):
+  def __init__(self, model, input: str, annotated_toxic: bool, max_perturbs: int, homoglyphs: Dict[str,List[str]] = intentionals):
     super().__init__(model, input, annotated_toxic, max_perturbs)
     self.homoglyphs = homoglyphs
     self.glyph_map = []
@@ -583,7 +581,7 @@ class HomoglyphToxicObjective(ToxicObjective):
 class ReorderToxicObjective(ToxicObjective):
   """Class representing a Toxic Objective which injects homoglyphs."""
 
-  def __init__(self, model, input: str, annotated_toxic: bool, max_perturbs: int = 25, **kwargs):
+  def __init__(self, model, input: str, annotated_toxic: bool, max_perturbs: int):
     super().__init__(model, input, annotated_toxic, max_perturbs)
 
   def bounds(self) -> List[Tuple[float, float]]:
@@ -614,7 +612,7 @@ class ReorderToxicObjective(ToxicObjective):
 class DeletionToxicObjective(ToxicObjective):
   """Class representing a Toxic Objective which injects homoglyphs."""
 
-  def __init__(self, model, input: str, annotated_toxic: bool, max_perturbs: int = 25, del_chr: str = BKSP, ins_chr_min: str = '!', ins_chr_max: str = '~', **kwargs):
+  def __init__(self, model, input: str, annotated_toxic: bool, max_perturbs: int, del_chr: str = BKSP, ins_chr_min: str = '!', ins_chr_max: str = '~'):
     super().__init__(model, input, annotated_toxic, max_perturbs)
     self.del_chr = del_chr
     self.ins_chr_min: str = ins_chr_min
@@ -712,7 +710,7 @@ class ToxicPerspectiveObjective(ABC):
 class InvisibleToxicPerspectiveObjective(ToxicPerspectiveObjective):
   """Class representing a Toxic Perspective API Objective which injects invisible characters."""
 
-  def __init__(self, client, input: str, rate_limit: int, annotated_toxic: bool, max_perturbs: int = 25, invisible_chrs: List[str] = [ZWJ,ZWSP,ZWNJ], **kwargs):
+  def __init__(self, client, input: str, rate_limit: int, annotated_toxic: bool, max_perturbs: int, invisible_chrs: List[str] = [ZWJ,ZWSP,ZWNJ]):
     super().__init__(client, input, rate_limit, max_perturbs, annotated_toxic)
     self.invisible_chrs: List[str] = invisible_chrs
 
@@ -732,7 +730,7 @@ class InvisibleToxicPerspectiveObjective(ToxicPerspectiveObjective):
 class HomoglyphToxicPerspectiveObjective(ToxicPerspectiveObjective):
   """Class representing a Toxic Perspective API Objective which injects homoglyphs."""
 
-  def __init__(self, client, input: str, rate_limit: int, annotated_toxic: bool, max_perturbs: int = 25, homoglyphs: Dict[str,List[str]] = intentionals, **kwargs):
+  def __init__(self, client, input: str, rate_limit: int, annotated_toxic: bool, max_perturbs: int, homoglyphs: Dict[str,List[str]] = intentionals):
     super().__init__(client, input, rate_limit, max_perturbs, annotated_toxic)
     self.homoglyphs = homoglyphs
     self.glyph_map = []
@@ -757,7 +755,7 @@ class HomoglyphToxicPerspectiveObjective(ToxicPerspectiveObjective):
 class ReorderToxicPerspectiveObjective(ToxicPerspectiveObjective):
   """Class representing a Toxic Perspective API Objective which injects reorderings."""
 
-  def __init__(self, client, input: str, rate_limit: int, annotated_toxic: bool, max_perturbs: int = 25, **kwargs):
+  def __init__(self, client, input: str, rate_limit: int, annotated_toxic: bool, max_perturbs: int):
     super().__init__(client, input, rate_limit, max_perturbs, annotated_toxic)
 
   def bounds(self) -> List[Tuple[float, float]]:
@@ -788,7 +786,7 @@ class ReorderToxicPerspectiveObjective(ToxicPerspectiveObjective):
 class DeletionToxicPerspectiveObjective(ToxicPerspectiveObjective):
   """Class representing a Toxic Perspective API Objective which injects deletions."""
 
-  def __init__(self, client, input: str, rate_limit: int, annotated_toxic: bool, max_perturbs: int = 25, del_chr: str = BKSP, ins_chr_min: str = '!', ins_chr_max: str = '~', **kwargs):
+  def __init__(self, client, input: str, rate_limit: int, annotated_toxic: bool, max_perturbs: int, del_chr: str = BKSP, ins_chr_min: str = '!', ins_chr_max: str = '~'):
     super().__init__(client, input, rate_limit, max_perturbs, annotated_toxic)
     self.del_chr = del_chr
     self.ins_chr_min: str = ins_chr_min
@@ -816,6 +814,59 @@ class MemoryCache(Cache):
 
     def set(self, url, content):
         MemoryCache._CACHE[url] = content
+
+
+class SpongeObjective(ABC):
+  """Class representing availability (sponge) translation attacks."""
+
+  def objective(self) -> Callable[[List[float]], float]:
+    def _objective(perturbations: List[float]) -> float:
+      candidate: str = self.candidate(perturbations)
+      return -1 * timeit(lambda: self.model.translate(candidate), number=1)
+    return _objective
+
+  def differential_evolution(self, verbose=False, maxiter=60, popsize=32, polish=False) -> str:
+    start = process_time()
+    result = differential_evolution(self.objective(), self.bounds(),
+                                    disp=verbose, maxiter=maxiter,
+                                    popsize=popsize, polish=polish)
+    end = process_time()
+    candidate = self.candidate(result.x)
+    input_inf_time = timeit(lambda: self.model.translate(self.input), number=1)
+    return  {
+              'adv_example': candidate,
+              'adv_example_enc': result.x,
+              'input_translation_distance': self.distance(candidate, self.input),
+              'ref_translation_distance': self.distance(candidate, self.ref_translation),
+              'input': self.input,
+              'input_translation': self.output,
+              'adv_translation': self.model.translate(candidate),
+              'ref_translation': self.ref_translation,
+              'input_inference_time': input_inf_time,
+              'adv_inference_time': -result.fun,
+              'ref_bleu': corpus_bleu(candidate, self.ref_translation).score,
+              'input_bleu': corpus_bleu(candidate, self.input).score,
+              'adv_generation_time': end - start,
+              'budget': self.max_perturbs,
+              'maxiter': maxiter,
+              'popsize': popsize
+            }
+
+
+class InvisibleCharacterSpongeObjective(SpongeObjective, InvisibleCharacterObjective):
+  pass
+
+
+class HomoglyphSpongeObjective(SpongeObjective, HomoglyphObjective):
+  pass
+
+
+class ReorderSpongeObjective(SpongeObjective, ReorderObjective):
+  pass
+
+
+class DeletionSpongeObjective(SpongeObjective, DeletionObjective):
+  pass
 
 
 # --- Helper Functions ---
@@ -943,7 +994,7 @@ def experiment(model, objective, source, target, min_perturb, max_perturb, file,
           for segid, seg in doc.items():
             if segid not in perturbs[label][str(i)][docid]:
               ref = target[j][docid][segid]
-              perturbs[label][str(i)][docid][segid] = objective(en2fr, seg, ref, max_perturbs=i).differential_evolution(maxiter=maxiter, popsize=popsize)
+              perturbs[label][str(i)][docid][segid] = objective(en2fr, seg, ref, i).differential_evolution(maxiter=maxiter, popsize=popsize)
               with open(file, 'wb') as f:
                 pickle.dump(perturbs, f)
             else:
@@ -1150,9 +1201,66 @@ def perspective_experiment(objective, client, file, min_budget, max_budget, exam
           sleep(0.1)
         pbar.update(1)
 
+def sponge_experiment(model, objective, source, target, min_perturb, max_perturb, file, maxiter, popsize, n_examples, label, overwrite):
+  if overwrite or not exists(file):
+    perturbs = { label: { '0': dict() } }
+  else:
+    with open(file, 'rb') as f:
+      perturbs = pickle.load(f)
+    if label not in perturbs:
+      perturbs[label] = dict()
+    if '0' not in perturbs[label]:
+      perturbs[label]['0'] = dict()
+  for i, example in enumerate(source):
+    for docid, doc in example.items():
+      if docid not in perturbs[label]['0']:
+        perturbs[label]['0'][docid] = dict()
+      for segid, seg in doc.items():
+        if segid not in perturbs[label]['0'][docid]:
+          ref = target[i][docid][segid]
+          output = model.translate(seg)
+          inf_time = timeit(lambda: model.translate(seg), number=1)
+          perturbs[label]['0'][docid][segid] = {
+                'adv_example': seg,
+                'adv_example_enc': [],
+                'input_translation_distance': levenshtein.distance(seg, seg),
+                'ref_translation_distance': levenshtein.distance(seg, ref),
+                'input': seg,
+                'input_translation': output,
+                'adv_translation': output,
+                'ref_translation': ref,
+                'input_inference_time': inf_time,
+                'adv_inference_time': inf_time,
+                'ref_bleu': corpus_bleu(seg, ref).score,
+                'input_bleu': corpus_bleu(seg, seg).score,
+                'adv_generation_time': 0,
+                'budget': 0,
+                'maxiter': maxiter,
+                'popsize': popsize
+              }
+  with tqdm(total=n_examples*(max_perturb-min_perturb+1), desc="Adv. Examples") as pbar:
+    for i in range(min_perturb, max_perturb+1):
+      if str(i) not in perturbs[label]:
+        perturbs[label][str(i)] = dict()
+      for j, example in enumerate(source):
+        for docid, doc in example.items():
+          if docid not in perturbs[label][str(i)]:
+            perturbs[label][str(i)][docid] = dict()
+          for segid, seg in doc.items():
+            if segid not in perturbs[label][str(i)][docid]:
+              ref = target[j][docid][segid]
+              perturbs[label][str(i)][docid][segid] = objective(en2fr, seg, ref, i).differential_evolution(maxiter=maxiter, popsize=popsize)
+              with open(file, 'wb') as f:
+                pickle.dump(perturbs, f)
+            else:
+              # Required for progress bar to update correctly
+              sleep(0.1)
+            pbar.update(1)
+
 def load_en2fr(cpu):
   # Load pre-trained translation model
   print("Loading EN->FR translation model.")
+  getLogger('fairseq').setLevel(WARNING)
   en2fr = torch.hub.load('pytorch/fairseq',
                         'transformer.wmt14.en-fr',
                         tokenizer='moses',
@@ -1168,6 +1276,7 @@ def load_en2fr(cpu):
 def load_mnli(cpu):
   # Load pre-trained MNLI model
   print("Loading MNLI classification model.")
+  getLogger('fairseq').setLevel(WARNING)
   mnli = torch.hub.load('pytorch/fairseq',
                         'roberta.large.mnli',
                         verbose=False).eval()
@@ -1218,6 +1327,7 @@ if __name__ == '__main__':
   parser.add_argument('-a', '--maxiter', type=int, default=3, help="The maximum number of iterations in the genetic algorithm.")
   parser.add_argument('-p', '--popsize', type=int, default=32, help="The size of the population in he genetic algorithm.")
   parser.add_argument('-o', '--overwrite', action='store_true', help="Overwrite existing results file instead of resuming.")
+  parser.add_argument('-s', '--sponge', action='store_true', help="Perform an availability attack using sponge examples.")
   parser.add_argument('-R', '--rate-limit', type=int, default=10, help="The rate limit with which to throttle requests against the Google Perspective API (in QPS).")
   targeted = parser.add_mutually_exclusive_group()
   targeted.add_argument('-x', '--targeted', action='store_true', help="Perform a targeted attack.")
@@ -1233,26 +1343,51 @@ if __name__ == '__main__':
     source, target, n_examples = load_source(args.num_examples)
     print(f"Loaded {n_examples} strings from corpus.")
 
-    if args.invisible_chars:
-      print("Starting invisible characters translation experiment.")
-      objective = InvisibleCharacterObjective
-      label = "translation_invisibles"
-    elif args.homoglyphs:
-      print("Starting homoglyphs translation experiment.")
-      objective = InvisibleCharacterObjective
-      label = "translation_homoglyphs"
-    elif args.reorderings:
-      print("Starting reorderings translation experiment.")
-      objective = InvisibleCharacterObjective
-      label = "translation_reorderings"
-    elif args.deletions:
-      print("Starting deletions translation experiment.")
-      objective = InvisibleCharacterObjective
-      label = "translation_deletions"
+    if args.sponge:
+      if args.invisible_chars:
+        print("Starting invisible character sponge example translation experiment.")
+        objective = InvisibleCharacterSpongeObjective
+        label = "translation_sponge_invisibles"
+      elif args.homoglyphs:
+        print("Starting homoglyph sponge example translation experiment.")
+        objective = HomoglyphSpongeObjective
+        label = "translation_sponge_homoglyphs"
+      elif args.reorderings:
+        print("Starting reordering sponge example translation experiment.")
+        objective = ReorderSpongeObjective
+        label = "translation_sponge_reorderings"
+      elif args.deletions:
+        print("Starting deletion sponge example translation experiment.")
+        objective = DeletionSpongeObjective
+        label = "translation_sponge_deletions"
 
-    experiment(en2fr, objective, source, target, args.min_perturbs, args.max_perturbs, args.pkl_file, args.maxiter, args.popsize, n_examples, label, args.overwrite)
+      sponge_experiment(en2fr, objective, source, target, args.min_perturbs, args.max_perturbs, args.pkl_file, args.maxiter, args.popsize, n_examples, label, args.overwrite)
+
+    else:
+      if args.invisible_chars:
+        print("Starting invisible characters translation experiment.")
+        objective = InvisibleCharacterObjective
+        label = "translation_invisibles"
+      elif args.homoglyphs:
+        print("Starting homoglyphs translation experiment.")
+        objective = HomoglyphObjective
+        label = "translation_homoglyphs"
+      elif args.reorderings:
+        print("Starting reorderings translation experiment.")
+        objective = ReorderObjective
+        label = "translation_reorderings"
+      elif args.deletions:
+        print("Starting deletions translation experiment.")
+        objective = DeletionObjective
+        label = "translation_deletions"
+
+      experiment(en2fr, objective, source, target, args.min_perturbs, args.max_perturbs, args.pkl_file, args.maxiter, args.popsize, n_examples, label, args.overwrite)
 
   elif args.mnli:
+    if args.sponge:
+      print("Sponge example attacks for MNLI have not been implemented.")
+      sys.exit(1)
+
     mnli = load_mnli(args.cpu)
     data = mnli_test[:args.num_examples]
     print(f"Loaded {len(data)} strings from corpus.")
@@ -1264,15 +1399,15 @@ if __name__ == '__main__':
         label = "mnli_invisibles_targeted"
       elif args.homoglyphs:
         print(f"Starting homoglyphs targeted MNLI experiment.")
-        objective = InvisibleCharacterTargetedMnliObjective
+        objective = HomoglyphTargetedMnliObjective
         label = "mnli_homoglyphs_targeted"
       elif args.reorderings:
         print(f"Starting reorderings targeted MNLI experiment.")
-        objective = InvisibleCharacterTargetedMnliObjective
+        objective = ReorderTargetedMnliObjective
         label = "mnli_reorderings_targeted"
       elif args.deletions:
         print(f"Starting deletions targeted MNLI experiment.")
-        objective = InvisibleCharacterTargetedMnliObjective
+        objective = DeletionTargetedMnliObjective
         label = "mnli_deletions_targeted"
       
       mnli_targeted_experiment(objective, mnli, data, args.pkl_file, args.min_perturbs, args.max_perturbs, args.maxiter, args.popsize, label, args.overwrite)
@@ -1284,15 +1419,15 @@ if __name__ == '__main__':
         label = "mnli_invisibles_targeted_nologits"
       elif args.homoglyphs:
         print(f"Starting homoglyphs targeted MNLI (no logits) experiment.")
-        objective = InvisibleCharacterTargetedMnliNoLogitsObjective
+        objective = HomoglyphTargetedMnliNoLogitsObjective
         label = "mnli_homoglyphs_targeted_nologits"
       elif args.reorderings:
         print(f"Starting reorderings targeted MNLI (no logits) experiment.")
-        objective = InvisibleCharacterTargetedMnliNoLogitsObjective
+        objective = ReorderTargetedMnliNoLogitsObjective
         label = "mnli_reorderings_targeted_nologits"
       elif args.deletions:
         print(f"Starting deletions targeted MNLI (no logits) experiment.")
-        objective = InvisibleCharacterTargetedMnliNoLogitsObjective
+        objective = DeletionTargetedMnliNoLogitsObjective
         label = "mnli_deletions_targeted_nologits"
       
       mnli_targeted_experiment(objective, mnli, data, args.pkl_file, args.min_perturbs, args.max_perturbs, args.maxiter, args.popsize, label, args.overwrite)
@@ -1304,15 +1439,15 @@ if __name__ == '__main__':
         label = "mnli_invisibles_untargeted"
       elif args.homoglyphs:
         print(f"Starting homoglyphs MNLI experiment.")
-        objective = InvisibleCharacterMnliObjective
+        objective = HomoglyphMnliObjective
         label = "mnli_homoglyphs_untargeted"
       elif args.reorderings:
         print(f"Starting reorderings MNLI experiment.")
-        objective = InvisibleCharacterMnliObjective
+        objective = ReorderMnliObjective
         label = "mnli_reorderings_untargeted"
       elif args.deletions:
         print(f"Starting deletions MNLI experiment.")
-        objective = InvisibleCharacterMnliObjective
+        objective = DeletionMnliObjective
         label = "mnli_deletions_untargeted"
 
       mnli_experiment(mnli, objective, data, args.pkl_file, args.min_perturbs, args.max_perturbs, args.maxiter, args.popsize, label, args.overwrite)
@@ -1320,6 +1455,9 @@ if __name__ == '__main__':
   elif args.max_toxic:
     if args.targeted or args.targeted_no_logits:
       print("Targeted attacks for Max Toxic have not been implemented.")
+      sys.exit(1)
+    elif args.sponge:
+      print("Sponge example attacks for Max Toxic have not been implemented.")
       sys.exit(1)
 
     maxtoxic = load_maxtoxic(args.cpu)
@@ -1348,6 +1486,9 @@ if __name__ == '__main__':
   elif args.perspective:
     if args.targeted or args.targeted_no_logits:
       print("Targeted attacks for the Perspective API have not been implemented.")
+      sys.exit(1)
+    elif args.sponge:
+      print("Sponge example attacks for the Perspective API have not been implemented.")
       sys.exit(1)
 
     api_key = getpass("Perspective API Key: ")
