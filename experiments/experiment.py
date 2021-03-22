@@ -1319,7 +1319,7 @@ if __name__ == '__main__':
   task.add_argument('-m', '--mnli', action='store_true', help="Target MNLI task (Roberta).")
   task.add_argument('-T', '--max-toxic', action='store_true', help="Target IBM Max Toxic model for toxic content.")
   task.add_argument('-P', '--perspective', action='store_true', help="Target Google Perspective API for toxic content.")
-  parser.add_argument('-c', '--cpu', action='store_true', default=False, help="Use CPU for ML inference instead of CUDA.")
+  parser.add_argument('-c', '--cpu', action='store_true', help="Use CPU for ML inference instead of CUDA.")
   parser.add_argument('pkl_file', help="File to contain Python pickled output.")
   parser.add_argument('-n', '--num-examples', type=int, default=500, help="Number of adversarial examples to generate.")
   parser.add_argument('-l', '--min-perturbs', type=int, default=1, help="The lower bound (inclusive) of the perturbation budget range.")
