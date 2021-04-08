@@ -296,18 +296,22 @@ class MnliObjective():
     candidate = self.candidate(result.x)
     tokens = self.model.encode(candidate, self.hypothesis)
     predict = self.model.predict('mnli', tokens)
+    probs = softmax(predict, dim=1).cpu().detach().numpy()[0]
+    selection = probs.argmax().item()
     inp_tokens = self.model.encode(self.input, self.hypothesis)
-    inp_predict = self.model.predict('mnli', tokens)
+    inp_predict = self.model.predict('mnli', inp_tokens)
+    inp_probs = softmax(inp_predict, dim=1).cpu().detach().numpy()[0]
+    inp_selection = inp_probs.argmax().item()
     return  {
               'adv_example': candidate,
               'adv_example_enc': result.x,
               'input': self.input,
               'hypothesis': self.hypothesis,
               'correct_label_index': self.label,
-              'adv_predictions': predict.cpu().detach().numpy()[0],
-              'input_prediction': inp_predict.cpu().detach().numpy()[0],
-              'adv_prediction_correct': predict.argmax().item() == self.label,
-              'input_prediction_correct': inp_predict.argmax().item() == self.label,
+              'adv_predictions': probs,
+              'input_prediction': inp_probs,
+              'adv_prediction_correct': selection == self.label,
+              'input_prediction_correct': inp_selection == self.label,
               'adv_generation_time': end - start,
               'budget': self.max_perturbs,
               'maxiter': maxiter,
@@ -385,7 +389,7 @@ class MnliTargetedObjective(MnliObjective):
     probs = softmax(predict, dim=1).cpu().detach().numpy()[0]
     selection = probs.argmax().item()
     inp_tokens = self.model.encode(self.input, self.hypothesis)
-    inp_predict = self.model.predict('mnli', tokens)
+    inp_predict = self.model.predict('mnli', inp_tokens)
     inp_probs = softmax(inp_predict, dim=1).cpu().detach().numpy()[0]
     inp_selection = inp_probs.argmax().item()
     return {
@@ -1019,17 +1023,17 @@ def mnli_experiment(model, objective, data, file, min_budget, max_budget, maxite
     if test['pairID'] not in perturbs[exp_label]['0']:
       tokens = model.encode(test['sentence1'], test['sentence2'])
       predict = model.predict('mnli', tokens)
-      predictions = predict.cpu().detach().numpy()[0]
+      probs = softmax(predict, dim=1).cpu().detach().numpy()[0]
       label = label_map[test['gold_label']]
-      correct = predict.argmax().item() == label
+      correct = probs.argmax().item() == label
       perturbs[exp_label]['0'][test['pairID']] = {
           'adv_example': test['sentence1'],
           'adv_example_enc': [],
           'input': test['sentence1'],
           'hypothesis': test['sentence2'],
           'correct_label_index': label,
-          'adv_predictions': predictions,
-          'input_prediction': predictions,
+          'adv_predictions': probs,
+          'input_prediction': probs,
           'adv_prediction_correct': correct,
           'input_prediction_correct': correct,
           'adv_generation_time': 0,
@@ -1124,9 +1128,9 @@ def max_toxic_experiment(objective, model, file, min_budget, max_budget, example
     if '0' not in perturbs[exp_label]:
       perturbs[exp_label]['0'] = dict()
   for example in examples:
-    if example['rev_id'] not in perturbs[exp_label]['0']:
+    if str(example['rev_id']) not in perturbs[exp_label]['0']:
       probs = model.predict([example['comment']])[0]
-      perturbs[exp_label]['0'][example['rev_id']] = {
+      perturbs[exp_label]['0'][str(example['rev_id'])] = {
               'adv_example': example['comment'],
               'adv_example_enc': [],
               'input': example['comment'],
@@ -1148,10 +1152,10 @@ def max_toxic_experiment(objective, model, file, min_budget, max_budget, example
       if str(budget) not in perturbs[exp_label]:
         perturbs[exp_label][str(budget)] = dict()
       for example in examples:
-        if example['rev_id'] not in perturbs[exp_label][str(budget)]:
+        if str(example['rev_id']) not in perturbs[exp_label][str(budget)]:
           obj = objective(model, example['comment'], example['toxicity'], budget)
           result = obj.differential_evolution(verbose=False, print_result=False, maxiter=maxiter, popsize=popsize, full_results=True)
-          perturbs[exp_label][str(budget)][example['rev_id']] = result
+          perturbs[exp_label][str(budget)][str(example['rev_id'])] = result
           with open(file, 'wb') as f:
             pickle.dump(perturbs, f)
         else:
@@ -1171,9 +1175,9 @@ def perspective_experiment(objective, client, file, min_budget, max_budget, exam
       perturbs[exp_label]['0'] = dict()
   obj = objective(client, "zero", rate_limit, False, 0)
   for example in examples:
-    if example['rev_id'] not in perturbs[exp_label]['0']:
+    if str(example['rev_id']) not in perturbs[exp_label]['0']:
       probs = obj.request(example['comment'])
-      perturbs[exp_label]['0'][example['rev_id']] = {
+      perturbs[exp_label]['0'][str(example['rev_id'])] = {
               'adv_example': example['comment'],
               'adv_example_enc': [],
               'input': example['comment'],
@@ -1193,10 +1197,10 @@ def perspective_experiment(objective, client, file, min_budget, max_budget, exam
       if str(budget) not in perturbs[exp_label]:
         perturbs[exp_label][str(budget)] = dict()
       for example in examples:
-        if example['rev_id'] not in perturbs[exp_label][str(budget)]:
+        if str(example['rev_id']) not in perturbs[exp_label][str(budget)]:
           obj = objective(client, example['comment'], rate_limit, example['toxicity'], budget)
           result = obj.differential_evolution(verbose=False, print_result=False, maxiter=maxiter, popsize=popsize, full_results=True)
-          perturbs[exp_label][str(budget)][example['rev_id']] = result
+          perturbs[exp_label][str(budget)][str(example['rev_id'])] = result
           with open(file, 'wb') as f:
             pickle.dump(perturbs, f)
         else:
