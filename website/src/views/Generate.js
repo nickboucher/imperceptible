@@ -1,4 +1,6 @@
-import {useState, useEffect} from "react";
+import { useState, useEffect } from "react";
+import useDimensions from "react-use-dimensions";
+import { useWindowHeight } from '@react-hook/window-size';
 
 // core components
 import IndexNavbar from "components/IndexNavbar.js";
@@ -51,6 +53,16 @@ export default function Generate() {
     const [homoglyphs, setHomoglyphs] = useState(true);
     const [reorderings, setReorderings] = useState(true);
     const [deletions, setDeletions] = useState(false);
+    const [footerRef, { height: footerHeight }] = useDimensions();
+    const windowHeight = useWindowHeight();
+    const [minHeight, setMinHeight] = useState('100vh');
+    useEffect(() => {
+      if (footerHeight && windowHeight) {
+        setMinHeight(windowHeight - footerHeight);
+      } else {
+        setMinHeight('100vh');
+      }
+    }, [footerHeight, windowHeight, setMinHeight]);
     useEffect(() => {
       let results = input.split("\n");
       for (let r=0; r<results.length; r++) {
@@ -122,7 +134,7 @@ export default function Generate() {
     <>
       <IndexNavbar />
       <div className="wrapper">
-        <div className="page-header d-flex flex-wrap">
+        <div className="page-header d-flex flex-wrap" style={{ minHeight: minHeight }}>
           <img
             alt="..."
             className="dots"
@@ -137,8 +149,13 @@ export default function Generate() {
             <Container className="below-nav mb-4">
                 <Row>
                     <Col md={12} className="text-center">
-                      <h1><b>Generate</b></h1>
+                      <h1><b>Perturbation<br />Generator</b></h1>
                     </Col>
+                </Row>
+                <Row>
+                  <Col md={12} className="text-center">
+                    <h3>Type some text below to generate imperceptible perturbations.<sup style={{ fontSize: '.5em', top: '-1em' }}>&dagger;</sup></h3>
+                  </Col>
                 </Row>
               <Form>
                   <FormGroup row className="mt-5 mb-n2">
@@ -148,7 +165,7 @@ export default function Generate() {
                               type="textarea"
                               name="inputText"
                               id="inputText"
-                              placeholder="Type some input text to generate a random imperceptibly perturbed output..."
+                              placeholder="Type some text to generate a random imperceptible perturbation..."
                               onChange={e => setInput(e.target.value)}
                           />
                       </Col>
@@ -184,7 +201,7 @@ export default function Generate() {
                             </Col>
                             <Col lg={2} sm={3} className="text-right">
                               <CopyToClipboard text={output} onCopy={(text,result) => setCopied(result) }>
-                                <Button id="copy"><i className="far fa-copy"></i></Button>
+                                <Button id="copy" className="btn-flat"><i className="far fa-copy"></i></Button>
                               </CopyToClipboard>
                               <Tooltip delay={0} target="copy" isOpen={tooltipOpen} toggle={toggle}>
                                 {({scheduleUpdate}) => (<TooltipContent copied={copied} scheduleUpdate={scheduleUpdate} />)}
@@ -200,14 +217,14 @@ export default function Generate() {
             <Container className="pt-0 pb-4">
               <Row>
                   <Col md={{ size: 10, offset: 2}}>
-                    <p className="text-muted">This tool generates a randomly chosen version of the input string with the selected imperceptible perturbations applied. All text entered remains on your local machine. Nothing is transmitted to or logged on any server. This tool is for academic purposes only and the user holds sole responsibility for how it is used.</p>
+                    <p className="text-muted"><sup>&dagger;</sup> This tool generates a randomly chosen version of the input string with the selected imperceptible perturbations applied. All text entered remains on your local machine. Nothing is transmitted to or logged on any server. This tool is for academic purposes only and the user holds sole responsibility for how it is used.</p>
                     <p className="text-muted">Compatability: Invisible characters and homoglpyhs should be compatible with most pieces of software supporting Unicode, which includes modern broswers. The algorithm used to generate reorderings is Unicode rendering engine specific, and was written to target Chromium-based software. Reorderings have been tested to render correctly on Google Chrome, the new Microsoft Edge, Safari, and Eletron-based applications. Due to the way most browsers render text, deletions are unlikely to render correctly in any modern browser. These values may render correctly when pasted into other applictions, such as any system which renders text using Python's Unicode engine.</p>
                   </Col>
               </Row>
           </Container>
           </div>
       </div>
-      <Footer />
+      <Footer ref={footerRef}/>
     </div>
     </>
   );

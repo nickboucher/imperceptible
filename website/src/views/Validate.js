@@ -1,4 +1,4 @@
-import {useState, useEffect} from "react";
+import {useState, useEffect, Fragment} from "react";
 
 // core components
 import IndexNavbar from "components/IndexNavbar.js";
@@ -6,6 +6,7 @@ import Footer from "components/Footer.js";
 
 // reactstrap components
 import {
+  Alert,
   Container,
   Row,
   Col,
@@ -23,6 +24,8 @@ import {
 
 import {invisibleChars, reorderingChars, deletionChars} from "variables/Constants.js";
 import unicodeRanges from "unicode-range-json";
+import useDimensions from "react-use-dimensions";
+import { useWindowHeight } from '@react-hook/window-size';
 
 const unicodeRange = (char) => {
   if (char.length === 1) {
@@ -42,6 +45,16 @@ export default function Validate() {
   const [homoglyphs, setHomoglyphs] = useState(false);
   const [reorderings, setReorderings] = useState(false);
   const [deletions, setDeletions] = useState(false);
+  const [footerRef, { height: footerHeight }] = useDimensions();
+  const windowHeight = useWindowHeight();
+  const [minHeight, setMinHeight] = useState('100vh');
+  useEffect(() => {
+    if (footerHeight && windowHeight) {
+      setMinHeight(windowHeight - footerHeight);
+    } else {
+      setMinHeight('100vh');
+    }
+  }, [footerHeight, windowHeight, setMinHeight]);
   useEffect(() => {
     // Reset all filters
     setInvisibles(false);
@@ -92,11 +105,11 @@ export default function Validate() {
     setOutput(input.split("\n").map((p, i) => <p className="pt-2" key={`p${i}`}>{p.split("").map((char, j) => {
       const codePoint = char.codePointAt(0);
       if (codePoint >= 0x20 && codePoint <= 0x7E) {
-        return char;
+        return <Fragment key={`s${i}-${j}`}>{char}</Fragment>;
       }
       else {
         const code = `U+${codePoint.toString(16).toUpperCase()}`;
-        return <>
+        return <Fragment key={`s${i}-${j}`}>
                   <span className="unicode" id={`pop-${i}-${j}`}>{code}</span>
                   <UncontrolledPopover target={`pop-${i}-${j}`} placement="top" trigger="hover" fade={false}>
                     <PopoverHeader>{code}</PopoverHeader>
@@ -105,7 +118,7 @@ export default function Validate() {
                       Unicode Range: {unicodeRange(char)}
                     </PopoverBody>
                   </UncontrolledPopover>
-               </>;
+               </Fragment>;
       }
     })}</p>));
   }, [input]);
@@ -113,7 +126,7 @@ export default function Validate() {
     <>
       <IndexNavbar />
       <div className="wrapper">
-        <div className="page-header d-flex flex-wrap">
+        <div className="page-header d-flex flex-wrap" style={{ minHeight: minHeight }}>
           <img
             alt="..."
             className="dots"
@@ -128,8 +141,13 @@ export default function Validate() {
             <Container className="below-nav mb-4">
                 <Row>
                     <Col md={12} className="text-center">
-                      <h1><b>Validate</b></h1>
+                      <h1><b>Attack<br />Detector</b></h1>
                     </Col>
+                </Row>
+                <Row>
+                  <Col md={12} className="text-center">
+                    <h3>Paste text below to check for the presence of imperceptible perturbations.<sup style={{ fontSize: '.5em', top: '-1em' }}>&dagger;</sup></h3>
+                  </Col>
                 </Row>
                 <Form>
                   <FormGroup row className="mt-5 mb-n2">
@@ -149,12 +167,25 @@ export default function Validate() {
                   <Col md={2} style={{ visibility: input.length ? null : 'hidden' }}>
                       <h3>Output&nbsp;={'>'}</h3>
                   </Col>
-                  <Col md={10}>
+                  <Col md={10} style={{ display: input.length ? null : 'None' }}>
+                    <Row className="pb-4">
+                      <Col xs={12}>
+                        {invisibles || homoglyphs || reorderings || deletions ?
+                          <Alert color="danger">
+                            <b>Attack Detected</b> &mdash; imperceptible perturbations are present.
+                          </Alert>
+                          :
+                          <Alert color="success">
+                            <b>No Attack Detected</b> &mdash; imperceptible perturbations are not present.
+                          </Alert>
+                        }
+                      </Col>
+                    </Row>
                     <Row className="pb-4">
                       <Col md={3} xs={6} className="mb-4 mb-md-0">
                         <Nav className="nav-pills-icons nav-pills-warning" pills>
                           <NavItem id="invisibles" className="min-width-9">
-                            <NavLink className={invisibles ? "active" : null}>
+                            <NavLink className={(invisibles ? "active" : null) + " bg-img-none"}>
                               <i className="tim-icons icon-light-3" />
                               Invisibles
                             </NavLink>
@@ -172,7 +203,7 @@ export default function Validate() {
                       <Col md={3} xs={6} className="mb-4 mb-md-0">
                         <Nav className="nav-pills-icons nav-pills-warning" pills>
                           <NavItem id="homoglyphs" className="min-width-9">
-                            <NavLink className={homoglyphs ? "active" : null}>
+                            <NavLink className={(homoglyphs ? "active" : null) + " bg-img-none"}>
                               <i className="tim-icons icon-single-copy-04" />
                               Homoglyphs
                             </NavLink>
@@ -190,7 +221,7 @@ export default function Validate() {
                       <Col md={3} xs={6} className="mb-4 mb-md-0">
                         <Nav className="nav-pills-icons nav-pills-warning" pills>
                           <NavItem id="reorderings" className="min-width-9">
-                            <NavLink className={reorderings ? "active" : null}>
+                            <NavLink className={(reorderings ? "active" : null) + " bg-img-none"}>
                               <i className="tim-icons icon-refresh-02" />
                               Reorderings
                             </NavLink>
@@ -208,7 +239,7 @@ export default function Validate() {
                       <Col md={3} xs={6} className="mb-4 mb-md-0">
                         <Nav className="nav-pills-icons nav-pills-warning" pills>
                           <NavItem id="deletions" className="min-width-9">
-                            <NavLink className={deletions ? "active" : null}>
+                            <NavLink className={(deletions ? "active" : null) + " bg-img-none"}>
                               <i className="tim-icons icon-simple-remove" />
                               Deletions
                             </NavLink>
@@ -224,8 +255,8 @@ export default function Validate() {
                         </Nav>
                       </Col>
                     </Row>
-                    <div className="validated mt-4" style={{ display: input.length ? null : 'None' }}>
-                      <p className="text-muted"><b>Encoding Visualization:</b></p>
+                    <div className="validated mt-4">
+                      <p className="text-muted"><b>Encoding Visualization <small>(non visible-ASCII characters highlighted)</small>:</b></p>
                       {output}
                     </div>
                   </Col>
@@ -236,13 +267,13 @@ export default function Validate() {
             <Container className="pt-0 pb-4">
                 <Row>
                     <Col md={{ size: 10, offset: 2}}>
-                      <p className="text-muted">This tool tests whether the input string contains encodings that may be indicators of imperceptible perturbations. It is not guaranteed to detect all forms of imperceptible perturbations. All text entered remains on your local machine. Nothing is transmitted to or logged on any server. This tool is for academic purposes only and the user holds sole responsibility for how it is used.</p>
+                      <p className="text-muted"><sup>&dagger;</sup> This tool tests whether the input string contains encodings that may be indicators of imperceptible perturbations. It is not guaranteed to detect all forms of imperceptible perturbations. All text entered remains on your local machine. Nothing is transmitted to or logged on any server. This tool is for academic purposes only and the user holds sole responsibility for how it is used.</p>
                     </Col>
                 </Row>
             </Container>
           </div>
       </div>
-      <Footer />
+      <Footer ref={footerRef} />
     </div>
     </>
   );

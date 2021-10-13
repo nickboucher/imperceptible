@@ -1,4 +1,4 @@
-import React from "react";
+import React, { forwardRef } from "react";
 import { Link } from "react-router-dom";
 // reactstrap components
 import {
@@ -14,7 +14,7 @@ import {
   Col
 } from "reactstrap";
 
-export default function IndexNavbar() {
+const IndexNavbar = forwardRef((props, ref) => {
   const [collapseOpen, setCollapseOpen] = React.useState(false);
   const [collapseOut, setCollapseOut] = React.useState("");
   const [color, setColor] = React.useState("navbar-transparent");
@@ -48,7 +48,7 @@ export default function IndexNavbar() {
     setCollapseOut("");
   };
   return (
-    <Navbar className={"fixed-top " + color} color-on-scroll="100" expand="lg">
+    <Navbar {...props} ref={ref} className={"fixed-top " + color} color-on-scroll="100" expand="lg">
       <Container>
         <div className="navbar-translate">
           <NavbarBrand to="/" tag={Link} id="navbar-brand">
@@ -91,20 +91,20 @@ export default function IndexNavbar() {
           </div>
           <Nav navbar>
             <NavItem>
-              <NavLink tag={Link} to="/validate">
-                Validate
+              <NavLink tag={Link} to="/detector">
+                Attack Detector
               </NavLink>
             </NavItem>
             <NavItem>
-              <NavLink tag={Link} to="/generate">
-                Generate
+              <NavLink tag={Link} to="/generator">
+                Perturbation Generator
               </NavLink>
             </NavItem>
             <NavItem>
               <Button
                 className="nav-link d-lg-block mt-2 mt-lg-0"
                 color="primary"
-                href={process.env.PUBLIC_URL + '/paper.pdf'}
+                href="https://arxiv.org/pdf/2106.09898.pdf"
               >
                 &nbsp;Read Paper&nbsp;
               </Button>
@@ -114,4 +114,6 @@ export default function IndexNavbar() {
       </Container>
     </Navbar>
   );
-}
+})
+
+export default IndexNavbar;

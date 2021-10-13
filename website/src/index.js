@@ -14,8 +14,8 @@ render(
   <BrowserRouter>
     <Switch>
       <Route exact path="/" render={(props) => <Index {...props} />} />
-      <Route path="/validate" render={(props) => <Validate {...props} />} />
-      <Route path="/generate" render={(props) => <Generate {...props} />} />
+      <Route path="/detector" render={(props) => <Validate {...props} />} />
+      <Route path="/generator" render={(props) => <Generate {...props} />} />
       <Redirect to="/" />
     </Switch>
   </BrowserRouter>,

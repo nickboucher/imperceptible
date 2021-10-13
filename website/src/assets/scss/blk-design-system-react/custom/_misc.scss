@@ -179,7 +179,14 @@ a[data-toggle="collapse"][aria-expanded="true"] .caret,
 }
 
 code {
-  color: $pink;
+  color: #d051dd;
+}
+
+.bibtex {
+  color: white;
+  background-color: #0c0e2c;
+  border-radius: 20px;
+  padding: 20px;
 }
 
 // iFrame News
@@ -245,4 +252,12 @@ code {
   .btcwdgt-headlines .btcwdgt-body ul li:nth-child(2n) {
       background-color: #2a2f63 !important;
   }
+}
+
+.bg-img-none {
+  background-image: none !important;
+}
+
+.bg-img-contain {
+  background-size: contain !important;
 }

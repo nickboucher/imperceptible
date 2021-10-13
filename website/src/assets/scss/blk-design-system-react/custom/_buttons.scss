@@ -255,3 +255,7 @@
     @include social-buttons-color($github, $github-states);
   }
 }
+
+.btn-flat, .btn-flat:hover {
+  background-image: none !important;
+}

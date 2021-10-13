@@ -167,3 +167,7 @@
         display: inline-flex;
     }
 }
+
+.nav-pills-warning .nav-link.active {
+    background-color: #ed5c55 !important;
+}
