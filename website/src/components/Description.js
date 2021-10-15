@@ -77,7 +77,7 @@ export default function Basics() {
                     </NavLink>
                   </NavItem>
                   <UncontrolledPopover target="homoglyphs" placement="top" trigger="hover" fade={false}>
-                    <PopoverHeader>Invisible Characters</PopoverHeader>
+                    <PopoverHeader>Homoglyphs</PopoverHeader>
                     <PopoverBody>
                       Homoglyphs are distinct characters that render to the same or nearly the same glyph, such as the Latin <code>a</code> and the Cyrillic <code>а</code>. If any homoglyphs exist for a certain character, they can be swapped freely in most fonts.
                     </PopoverBody>
@@ -89,7 +89,7 @@ export default function Basics() {
                     </NavLink>
                   </NavItem>
                   <UncontrolledPopover target="reorderings" placement="top" trigger="hover" fade={false}>
-                    <PopoverHeader>Invisible Characters</PopoverHeader>
+                    <PopoverHeader>Reorderings</PopoverHeader>
                     <PopoverBody>
                       Reorderings are methods by which special control characters can be used to change the rendering order of encoded characters. Although rendering order implementations vary by platform, well-crafted reorderings will render as desired on most modern platforms and can be injected an arbitrary number of times.
                     </PopoverBody>
@@ -101,7 +101,7 @@ export default function Basics() {
                     </NavLink>
                   </NavItem>
                   <UncontrolledPopover target="deletions" placement="top" trigger="hover" fade={false}>
-                    <PopoverHeader>Invisible Characters</PopoverHeader>
+                    <PopoverHeader>Deletions</PopoverHeader>
                     <PopoverBody>
                       Deletions are methods by which control characters designed to remove text, such as <code>backspace</code>, are used to hide characters within strings. Deletions are platform dependent and will only render as desired in some settings, such as strings passed through Python's <code>print()</code> function.
                     </PopoverBody>
