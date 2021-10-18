@@ -261,3 +261,9 @@ code {
 .bg-img-contain {
   background-size: contain !important;
 }
+
+@media only screen and (max-width: 510px) {
+  h1.xxs {
+    font-size: 3.5em !important;
+  }
+}

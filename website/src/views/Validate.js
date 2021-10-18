@@ -164,7 +164,7 @@ export default function Validate() {
                   </FormGroup>
               </Form>
               <Row className="mt-4 pt-4 mb-4 pb-4">
-                  <Col md={2} style={{ visibility: input.length ? null : 'hidden' }}>
+                  <Col md={2} style={{ display: input.length ? null : 'None' }}>
                       <h3>Output&nbsp;={'>'}</h3>
                   </Col>
                   <Col md={10} style={{ display: input.length ? null : 'None' }}>
@@ -264,7 +264,7 @@ export default function Validate() {
             </Container>
           </div>
           <div className="w-100 align-self-end">
-            <Container className="pt-0 pb-4">
+            <Container className="pt-4 pb-4">
                 <Row>
                     <Col md={{ size: 10, offset: 2}}>
                       <p className="text-muted"><sup>&dagger;</sup> This tool tests whether the input string contains encodings that may be indicators of imperceptible perturbations. It is not guaranteed to detect all forms of imperceptible perturbations. All text entered remains on your local machine. Nothing is transmitted to or logged on any server. This tool is for academic purposes only and the user holds sole responsibility for how it is used.</p>

@@ -149,7 +149,7 @@ export default function Generate() {
             <Container className="below-nav mb-4">
                 <Row>
                     <Col md={12} className="text-center">
-                      <h1><b>Perturbation<br />Generator</b></h1>
+                      <h1 className="xxs"><b>Perturbation<br />Generator</b></h1>
                     </Col>
                 </Row>
                 <Row>
@@ -214,7 +214,7 @@ export default function Generate() {
             </Container>
           </div>
           <div className="w-100 align-self-end">
-            <Container className="pt-0 pb-4">
+            <Container className="pt-4 pb-4">
               <Row>
                   <Col md={{ size: 10, offset: 2}}>
                     <p className="text-muted"><sup>&dagger;</sup> This tool generates a randomly chosen version of the input string with the selected imperceptible perturbations applied. All text entered remains on your local machine. Nothing is transmitted to or logged on any server. This tool is for academic purposes only and the user holds sole responsibility for how it is used.</p>
