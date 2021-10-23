@@ -53,7 +53,7 @@ export default function Basics() {
             <p className="main-text pt-3">Machine learning-based NLP systems are vulnerable to adversarial perturbations that are imperceptible to human users. This means that a motivated adversary can use imperceptible perturbations to control a system's output for a fixed visual input. Similarly, such perturbations can be used to poison training data.</p>
             <p className="main-text pt-3">These same methods can be used in an entirely different setting not just to degrade the performance of search engines, but also to allow content publishers to functionally hide content from search engine indexing systems.</p>
 
-            <h1 className="title pt-5">There Are Four Different Flavors.</h1>
+            <h1 className="title pt-5">There Are Four Flavors of Attack.</h1>
             <p className="main-text">Four different classifications of imperceptible perturbations exist:</p>
             <Row className="main-text text-center mt-4">
               <Col className="mb-4 mb-md-0">

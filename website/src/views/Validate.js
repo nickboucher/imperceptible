@@ -110,7 +110,7 @@ export default function Validate() {
       else {
         const code = `U+${codePoint.toString(16).toUpperCase()}`;
         return <Fragment key={`s${i}-${j}`}>
-                  <span className="unicode" id={`pop-${i}-${j}`}>{code}</span>
+                  <span className="unicode" id={`pop-${i}-${j}`}>{code}</span><wbr />
                   <UncontrolledPopover target={`pop-${i}-${j}`} placement="top" trigger="hover" fade={false}>
                     <PopoverHeader>{code}</PopoverHeader>
                     <PopoverBody className="text-center">
