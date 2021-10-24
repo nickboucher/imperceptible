@@ -22,3 +22,4 @@ sed -i 's/from config/from ..config/g' toxic/core/model.py
 sed -i 's/from core\./from ./g' toxic/core/model.py
 wget https://ndownloader.figshare.com/files/7394542 -O toxicity_annotated_comments.tsv
 wget https://ndownloader.figshare.com/files/7394539 -O toxicity_annotations.tsv
+pip3 install transformers datasets
