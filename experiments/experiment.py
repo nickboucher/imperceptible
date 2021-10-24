@@ -939,7 +939,7 @@ class InvisibleCharacterNerTargetedObjective(NerTargetedObjective):
   def candidate(self, perturbations: List[float]) -> str:
     candidate = [char for char in self.input]
     for i in range(0, len(perturbations), 2):
-      inp_index = natural(perturbations[i+1])
+      inp_index = integer(perturbations[i+1])
       if inp_index >= 0:
         inv_char = self.invisible_chrs[natural(perturbations[i])]
         candidate = candidate[:inp_index] + [inv_char] + candidate[inp_index:]
@@ -963,7 +963,7 @@ class HomoglyphNerTargetedObjective(NerTargetedObjective):
 
   def candidate(self, perturbations: List[float]) -> str:
     candidate = [char for char in self.input]  
-    for perturb in map(natural, perturbations):
+    for perturb in map(integer, perturbations):
       if perturb >= 0:
         i, char = self.glyph_map[perturb]
         candidate[i] = char
@@ -988,7 +988,7 @@ class ReorderNerTargetedObjective(NerTargetedObjective):
       return res
 
     _candidate = [char for char in self.input]
-    for perturb in map(natural, perturbations):
+    for perturb in map(integer, perturbations):
       if perturb >= 0 and len(_candidate) >= 2:
         perturb = min(perturb, len(_candidate) - 2)
         _candidate = _candidate[:perturb] + [Swap(_candidate[perturb+1], _candidate[perturb])] + _candidate[perturb+2:]
@@ -1010,7 +1010,7 @@ class DeletionNerTargetedObjective(NerTargetedObjective):
   def candidate(self, perturbations: List[float]) -> str:
     candidate = [char for char in self.input]
     for i in range(0, len(perturbations), 2):
-      idx = natural(perturbations[i])
+      idx = integer(perturbations[i])
       char = chr(natural(perturbations[i+1]))
       candidate = candidate[:idx] + [char, self.del_chr] + candidate[idx:]
       for j in range(i,len(perturbations), 2):
@@ -1066,6 +1066,10 @@ def uniswap(els):
 def natural(x: float) -> int:
     """Rounds float to the nearest natural number (positive int)"""
     return max(0, round(float(x)))
+
+def integer(x: float) -> int:
+    """Rounds float to the nearest int"""
+    return round(float(x))
 
 def detokenize(tokens: List[str]) -> str:
   output = ""
