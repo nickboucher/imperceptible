@@ -1037,7 +1037,7 @@ class EmotionTargetedObjective():
         candidate: str = self.candidate(perturbations)
         predicts = self.model(candidate)[0]
         score = predicts[self.target]['score']
-        if np.argmax(list(map(lambda x: x['score'], predicts))) == target:
+        if np.argmax(list(map(lambda x: x['score'], predicts))) == self.target:
           score += 1
         return -score
       return _objective
@@ -1646,7 +1646,7 @@ def emotion_targeted_experiment(objective, model, inputs, file, min_budget, max_
       perturbs[exp_label]['0'][str(idx)] = dict()
     for target, target_label in enumerate(emotion_classes):
       if target_label not in perturbs[exp_label]['0'][str(idx)]:
-        score = -predicts[target]
+        score = -predicts[target]['score']
         if np.argmax(list(map(lambda x: x['score'], predicts))) == target:
           score -= 1
         successful_attack = score <= -1
@@ -1675,7 +1675,7 @@ def emotion_targeted_experiment(objective, model, inputs, file, min_budget, max_
         for target, target_label in enumerate(emotion_classes):
           if target_label not in perturbs[exp_label][str(budget)][str(idx)]:
             sentence = input['text']
-            obj = objective(model, sentence, emotion_classes(input['label']), target, budget)
+            obj = objective(model, sentence, emotion_classes[input['label']], target, budget)
             example = obj.differential_evolution(verbose=False, maxiter=maxiter, popsize=popsize)
             perturbs[exp_label][str(budget)][str(idx)][target_label] = example
             with open(file, 'wb') as f:
@@ -2018,6 +2018,6 @@ if __name__ == '__main__':
       objective = DeletionEmotionTargetedObjective
       label = "emotion_targeted_deletions"
 
-    ner_targeted_experiment(objective, emotion, emotion_data, args.pkl_file, args.min_perturbs, args.max_perturbs, args.maxiter, args.popsize, label, args.overwrite)
+    emotion_targeted_experiment(objective, emotion, emotion_data, args.pkl_file, args.min_perturbs, args.max_perturbs, args.maxiter, args.popsize, label, args.overwrite)
 
 print(f"Experiment complete. Results written to {args.pkl_file}.")
