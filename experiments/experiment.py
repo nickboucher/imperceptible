@@ -11,9 +11,9 @@ try:
   from abc import ABC
   from typing import List, Tuple, Callable, Dict
   from fairseq.hub_utils import GeneratorHubInterface
-  from scipy.optimize import NonlinearConstraint, differential_evolution
+  from scipy.optimize import differential_evolution
   from textdistance import levenshtein
-  from tqdm.auto import tqdm, trange
+  from tqdm.auto import tqdm
   from argparse import ArgumentParser
   from sacrebleu import corpus_bleu
   from time import process_time, sleep, time
@@ -183,7 +183,7 @@ class InvisibleCharacterObjective(Objective):
   def candidate(self, perturbations: List[float]) -> str:
     candidate = [char for char in self.input]
     for i in range(0, len(perturbations), 2):
-      inp_index = natural(perturbations[i+1])
+      inp_index = integer(perturbations[i+1])
       if inp_index >= 0:
         inv_char = self.invisible_chrs[natural(perturbations[i])]
         candidate = candidate[:inp_index] + [inv_char] + candidate[inp_index:]
@@ -207,7 +207,7 @@ class HomoglyphObjective(Objective):
 
   def candidate(self, perturbations: List[float]) -> str:
     candidate = [char for char in self.input]  
-    for perturb in map(natural, perturbations):
+    for perturb in map(integer, perturbations):
       if perturb >= 0:
         i, char = self.glyph_map[perturb]
         candidate[i] = char
@@ -236,7 +236,7 @@ class ReorderObjective(Objective):
       return res
 
     _candidate = [char for char in self.input]
-    for perturb in map(natural, perturbations):
+    for perturb in map(integer, perturbations):
       if perturb >= 0 and len(_candidate) >= 2:
         perturb = min(perturb, len(_candidate) - 2)
         _candidate = _candidate[:perturb] + [Swap(_candidate[perturb+1], _candidate[perturb])] + _candidate[perturb+2:]
@@ -259,11 +259,12 @@ class DeletionObjective(Objective):
   def candidate(self, perturbations: List[float]) -> str:
     candidate = [char for char in self.input]
     for i in range(0, len(perturbations), 2):
-      idx = natural(perturbations[i])
-      char = chr(natural(perturbations[i+1]))
-      candidate = candidate[:idx] + [char, self.del_chr] + candidate[idx:]
-      for j in range(i,len(perturbations), 2):
-        perturbations[j] += 2
+      idx = integer(perturbations[i])
+      if idx >= 0:
+        char = chr(natural(perturbations[i+1]))
+        candidate = candidate[:idx] + [char, self.del_chr] + candidate[idx:]
+        for j in range(i,len(perturbations), 2):
+          perturbations[j] += 2
     return ''.join(candidate)
 
 
@@ -560,7 +561,7 @@ class InvisibleToxicObjective(ToxicObjective):
   def candidate(self, perturbations: List[float]) -> str:
     candidate = [char for char in self.input]
     for i in range(0, len(perturbations), 2):
-      inp_index = natural(perturbations[i+1])
+      inp_index = integer(perturbations[i+1])
       if inp_index >= 0:
         inv_char = self.invisible_chrs[natural(perturbations[i])]
         candidate = candidate[:inp_index] + [inv_char] + candidate[inp_index:]
@@ -585,7 +586,7 @@ class HomoglyphToxicObjective(ToxicObjective):
 
   def candidate(self, perturbations: List[float]) -> str:
     candidate = [char for char in self.input]  
-    for perturb in map(natural, perturbations):
+    for perturb in map(integer, perturbations):
       if perturb >= 0:
         i, char = self.glyph_map[perturb]
         candidate[i] = char
@@ -615,7 +616,7 @@ class ReorderToxicObjective(ToxicObjective):
       return res
 
     _candidate = [char for char in self.input]
-    for perturb in map(natural, perturbations):
+    for perturb in map(integer, perturbations):
       if perturb >= 0 and len(_candidate) >= 2:
         perturb = min(perturb, len(_candidate) - 2)
         _candidate = _candidate[:perturb] + [Swap(_candidate[perturb+1], _candidate[perturb])] + _candidate[perturb+2:]
@@ -638,11 +639,12 @@ class DeletionToxicObjective(ToxicObjective):
   def candidate(self, perturbations: List[float]) -> str:
     candidate = [char for char in self.input]
     for i in range(0, len(perturbations), 2):
-      idx = natural(perturbations[i])
-      char = chr(natural(perturbations[i+1]))
-      candidate = candidate[:idx] + [char, self.del_chr] + candidate[idx:]
-      for j in range(i,len(perturbations), 2):
-        perturbations[j] += 2
+      idx = integer(perturbations[i])
+      if idx >= 0:
+        char = chr(natural(perturbations[i+1]))
+        candidate = candidate[:idx] + [char, self.del_chr] + candidate[idx:]
+        for j in range(i,len(perturbations), 2):
+          perturbations[j] += 2
     return ''.join(candidate)
 
 
@@ -734,7 +736,7 @@ class InvisibleToxicPerspectiveObjective(ToxicPerspectiveObjective):
   def candidate(self, perturbations: List[float]) -> str:
     candidate = [char for char in self.input]
     for i in range(0, len(perturbations), 2):
-      inp_index = natural(perturbations[i+1])
+      inp_index = integer(perturbations[i+1])
       if inp_index >= 0:
         inv_char = self.invisible_chrs[natural(perturbations[i])]
         candidate = candidate[:inp_index] + [inv_char] + candidate[inp_index:]
@@ -759,7 +761,7 @@ class HomoglyphToxicPerspectiveObjective(ToxicPerspectiveObjective):
 
   def candidate(self, perturbations: List[float]) -> str:
     candidate = [char for char in self.input]  
-    for perturb in map(natural, perturbations):
+    for perturb in map(integer, perturbations):
       if perturb >= 0:
         i, char = self.glyph_map[perturb]
         candidate[i] = char
@@ -789,7 +791,7 @@ class ReorderToxicPerspectiveObjective(ToxicPerspectiveObjective):
       return res
 
     _candidate = [char for char in self.input]
-    for perturb in map(natural, perturbations):
+    for perturb in map(integer, perturbations):
       if perturb >= 0 and len(_candidate) >= 2:
         perturb = min(perturb, len(_candidate) - 2)
         _candidate = _candidate[:perturb] + [Swap(_candidate[perturb+1], _candidate[perturb])] + _candidate[perturb+2:]
@@ -812,11 +814,12 @@ class DeletionToxicPerspectiveObjective(ToxicPerspectiveObjective):
   def candidate(self, perturbations: List[float]) -> str:
     candidate = [char for char in self.input]
     for i in range(0, len(perturbations), 2):
-      idx = natural(perturbations[i])
-      char = chr(natural(perturbations[i+1]))
-      candidate = candidate[:idx] + [char, self.del_chr] + candidate[idx:]
-      for j in range(i,len(perturbations), 2):
-        perturbations[j] += 2
+      idx = integer(perturbations[i])
+      if idx >= 0:
+        char = chr(natural(perturbations[i+1]))
+        candidate = candidate[:idx] + [char, self.del_chr] + candidate[idx:]
+        for j in range(i,len(perturbations), 2):
+          perturbations[j] += 2
     return ''.join(candidate)
 
 
