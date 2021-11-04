@@ -34,9 +34,12 @@ If you use anything in this repository, in the [*Bad Characters*](https://arxiv.
 ```bibtex
 @article{boucher_imperceptible_2021,
     title = {Bad {Characters}: {Imperceptible} {NLP} {Attacks}},
-    url = {https://arxiv.org/abs/2106.09898},
-    journal = {Preprint.},
     author = {Nicholas Boucher and Ilia Shumailov and Ross Anderson and Nicolas Papernot},
-    year = {2021}
+    year = {2021},
+    journal = {Preprint},
+    eprint = {2106.09898},
+    archivePrefix = {arXiv},
+    primaryClass = {cs.CL},
+    url = {https://arxiv.org/abs/2106.09898}
 }
 ```
