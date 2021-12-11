@@ -11,9 +11,9 @@ try:
   from abc import ABC
   from typing import List, Tuple, Callable, Dict
   from fairseq.hub_utils import GeneratorHubInterface
-  from scipy.optimize import NonlinearConstraint, differential_evolution
+  from scipy.optimize import differential_evolution
   from textdistance import levenshtein
-  from tqdm.auto import tqdm, trange
+  from tqdm.auto import tqdm
   from argparse import ArgumentParser
   from sacrebleu import corpus_bleu
   from time import process_time, sleep, time
@@ -24,6 +24,9 @@ try:
   from googleapiclient.discovery_cache.base import Cache
   from googleapiclient import discovery
   from getpass import getpass
+  from transformers import Pipeline, pipeline
+  from datasets import load_dataset
+  from string import punctuation
 
   # --- Constants ---
 
@@ -82,6 +85,11 @@ try:
   comments['comment'] = comments['comment'].apply(lambda x: x.replace("TAB_TOKEN", " "))
   test_comments = comments.query("split=='test'").query("toxicity==True")
   examples = test_comments.reset_index().to_dict('records')
+
+  ner_labels = [ 'O', 'B-PER', 'I-PER', 'B-ORG', 'I-ORG', 'B-LOC', 'I-LOC', 'B-MISC', 'I-MISC']
+  ner_classes = ['PER', 'ORG', 'LOC', 'MISC']
+
+  emotion_classes = ['sadness', 'joy', 'love', 'anger', 'fear', 'surprise']
 
 except Exception as ex:
   print("Unable to initiate. Please ensure that you have already run `setup.sh` in this environment.")
@@ -175,7 +183,7 @@ class InvisibleCharacterObjective(Objective):
   def candidate(self, perturbations: List[float]) -> str:
     candidate = [char for char in self.input]
     for i in range(0, len(perturbations), 2):
-      inp_index = natural(perturbations[i+1])
+      inp_index = integer(perturbations[i+1])
       if inp_index >= 0:
         inv_char = self.invisible_chrs[natural(perturbations[i])]
         candidate = candidate[:inp_index] + [inv_char] + candidate[inp_index:]
@@ -199,7 +207,7 @@ class HomoglyphObjective(Objective):
 
   def candidate(self, perturbations: List[float]) -> str:
     candidate = [char for char in self.input]  
-    for perturb in map(natural, perturbations):
+    for perturb in map(integer, perturbations):
       if perturb >= 0:
         i, char = self.glyph_map[perturb]
         candidate[i] = char
@@ -228,7 +236,7 @@ class ReorderObjective(Objective):
       return res
 
     _candidate = [char for char in self.input]
-    for perturb in map(natural, perturbations):
+    for perturb in map(integer, perturbations):
       if perturb >= 0 and len(_candidate) >= 2:
         perturb = min(perturb, len(_candidate) - 2)
         _candidate = _candidate[:perturb] + [Swap(_candidate[perturb+1], _candidate[perturb])] + _candidate[perturb+2:]
@@ -251,11 +259,12 @@ class DeletionObjective(Objective):
   def candidate(self, perturbations: List[float]) -> str:
     candidate = [char for char in self.input]
     for i in range(0, len(perturbations), 2):
-      idx = natural(perturbations[i])
-      char = chr(natural(perturbations[i+1]))
-      candidate = candidate[:idx] + [char, self.del_chr] + candidate[idx:]
-      for j in range(i,len(perturbations), 2):
-        perturbations[j] += 2
+      idx = integer(perturbations[i])
+      if idx >= 0:
+        char = chr(natural(perturbations[i+1]))
+        candidate = candidate[:idx] + [char, self.del_chr] + candidate[idx:]
+        for j in range(i,len(perturbations), 2):
+          perturbations[j] += 2
     return ''.join(candidate)
 
 
@@ -552,7 +561,7 @@ class InvisibleToxicObjective(ToxicObjective):
   def candidate(self, perturbations: List[float]) -> str:
     candidate = [char for char in self.input]
     for i in range(0, len(perturbations), 2):
-      inp_index = natural(perturbations[i+1])
+      inp_index = integer(perturbations[i+1])
       if inp_index >= 0:
         inv_char = self.invisible_chrs[natural(perturbations[i])]
         candidate = candidate[:inp_index] + [inv_char] + candidate[inp_index:]
@@ -577,7 +586,7 @@ class HomoglyphToxicObjective(ToxicObjective):
 
   def candidate(self, perturbations: List[float]) -> str:
     candidate = [char for char in self.input]  
-    for perturb in map(natural, perturbations):
+    for perturb in map(integer, perturbations):
       if perturb >= 0:
         i, char = self.glyph_map[perturb]
         candidate[i] = char
@@ -607,7 +616,7 @@ class ReorderToxicObjective(ToxicObjective):
       return res
 
     _candidate = [char for char in self.input]
-    for perturb in map(natural, perturbations):
+    for perturb in map(integer, perturbations):
       if perturb >= 0 and len(_candidate) >= 2:
         perturb = min(perturb, len(_candidate) - 2)
         _candidate = _candidate[:perturb] + [Swap(_candidate[perturb+1], _candidate[perturb])] + _candidate[perturb+2:]
@@ -630,11 +639,12 @@ class DeletionToxicObjective(ToxicObjective):
   def candidate(self, perturbations: List[float]) -> str:
     candidate = [char for char in self.input]
     for i in range(0, len(perturbations), 2):
-      idx = natural(perturbations[i])
-      char = chr(natural(perturbations[i+1]))
-      candidate = candidate[:idx] + [char, self.del_chr] + candidate[idx:]
-      for j in range(i,len(perturbations), 2):
-        perturbations[j] += 2
+      idx = integer(perturbations[i])
+      if idx >= 0:
+        char = chr(natural(perturbations[i+1]))
+        candidate = candidate[:idx] + [char, self.del_chr] + candidate[idx:]
+        for j in range(i,len(perturbations), 2):
+          perturbations[j] += 2
     return ''.join(candidate)
 
 
@@ -726,7 +736,7 @@ class InvisibleToxicPerspectiveObjective(ToxicPerspectiveObjective):
   def candidate(self, perturbations: List[float]) -> str:
     candidate = [char for char in self.input]
     for i in range(0, len(perturbations), 2):
-      inp_index = natural(perturbations[i+1])
+      inp_index = integer(perturbations[i+1])
       if inp_index >= 0:
         inv_char = self.invisible_chrs[natural(perturbations[i])]
         candidate = candidate[:inp_index] + [inv_char] + candidate[inp_index:]
@@ -751,7 +761,7 @@ class HomoglyphToxicPerspectiveObjective(ToxicPerspectiveObjective):
 
   def candidate(self, perturbations: List[float]) -> str:
     candidate = [char for char in self.input]  
-    for perturb in map(natural, perturbations):
+    for perturb in map(integer, perturbations):
       if perturb >= 0:
         i, char = self.glyph_map[perturb]
         candidate[i] = char
@@ -781,7 +791,7 @@ class ReorderToxicPerspectiveObjective(ToxicPerspectiveObjective):
       return res
 
     _candidate = [char for char in self.input]
-    for perturb in map(natural, perturbations):
+    for perturb in map(integer, perturbations):
       if perturb >= 0 and len(_candidate) >= 2:
         perturb = min(perturb, len(_candidate) - 2)
         _candidate = _candidate[:perturb] + [Swap(_candidate[perturb+1], _candidate[perturb])] + _candidate[perturb+2:]
@@ -804,11 +814,12 @@ class DeletionToxicPerspectiveObjective(ToxicPerspectiveObjective):
   def candidate(self, perturbations: List[float]) -> str:
     candidate = [char for char in self.input]
     for i in range(0, len(perturbations), 2):
-      idx = natural(perturbations[i])
-      char = chr(natural(perturbations[i+1]))
-      candidate = candidate[:idx] + [char, self.del_chr] + candidate[idx:]
-      for j in range(i,len(perturbations), 2):
-        perturbations[j] += 2
+      idx = integer(perturbations[i])
+      if idx >= 0:
+        char = chr(natural(perturbations[i+1]))
+        candidate = candidate[:idx] + [char, self.del_chr] + candidate[idx:]
+        for j in range(i,len(perturbations), 2):
+          perturbations[j] += 2
     return ''.join(candidate)
 
 
@@ -875,6 +886,280 @@ class DeletionSpongeObjective(SpongeObjective, DeletionObjective):
   pass
 
 
+class NerTargetedObjective():
+
+  def __init__(self, model: Pipeline, input: str, labels: List[str], target: str, max_perturbs: int):
+    self.model: Pipeline = model
+    self.input: str = input
+    self.labels: List[str] = labels
+    self.max_perturbs: int = max_perturbs
+    self.target = target
+
+  def objective(self) -> Callable[[List[float]], float]:
+      def _objective(perturbations: List[float]) -> float:
+        candidate: str = self.candidate(perturbations)
+        predicts = self.model(candidate)
+        score = 0
+        for predict in predicts:
+          if predict['entity'].endswith(self.target):
+            score += predict['score']
+        return -score
+      return _objective
+
+  def differential_evolution(self, verbose=False, maxiter=3, popsize=32, polish=False) -> str:
+    start = process_time()
+    result = differential_evolution(self.objective(), self.bounds(),
+                                    disp=verbose, maxiter=maxiter,
+                                    popsize=popsize, polish=polish)
+    end = process_time()
+    successful_attack = result.fun < 0
+    candidate = self.candidate(result.x)
+    predicts = self.model(candidate)
+    inp_predicts = self.model(self.input)
+    return {
+      'adv_example': candidate,
+      'adv_example_enc': result.x,
+      'input': self.input,
+      'golden_labels': self.labels,
+      'adv_predictions': predicts,
+      'input_prediction': inp_predicts,
+      'adv_target_success': successful_attack,
+      'target_label': self.target,
+      'adv_generation_time': end - start,
+      'budget': self.max_perturbs,
+      'maxiter': maxiter,
+      'popsize': popsize
+    }
+
+
+class InvisibleCharacterNerTargetedObjective(NerTargetedObjective):
+  
+  def __init__(self, model: Pipeline, input: str, labels: List[str], target: str, max_perturbs: int, invisible_chrs: List[str] = [ZWJ,ZWSP,ZWNJ]):
+    super().__init__(model, input, labels, target, max_perturbs)
+    self.invisible_chrs = invisible_chrs
+
+  def bounds(self) -> List[Tuple[float, float]]:
+    return [(0,len(self.invisible_chrs)-1), (-1, len(self.input)-1)] * self.max_perturbs
+
+  def candidate(self, perturbations: List[float]) -> str:
+    candidate = [char for char in self.input]
+    for i in range(0, len(perturbations), 2):
+      inp_index = integer(perturbations[i+1])
+      if inp_index >= 0:
+        inv_char = self.invisible_chrs[natural(perturbations[i])]
+        candidate = candidate[:inp_index] + [inv_char] + candidate[inp_index:]
+    return ''.join(candidate)
+
+
+class HomoglyphNerTargetedObjective(NerTargetedObjective):
+
+  def __init__(self, model: Pipeline, input: str, labels: List[str], target: str, max_perturbs: int, homoglyphs: Dict[str,List[str]] = intentionals):
+    super().__init__(model, input, labels, target, max_perturbs)
+    self.homoglyphs = homoglyphs
+    self.glyph_map = []
+    for i, char in enumerate(self.input):
+      if char in self.homoglyphs:
+        charmap = self.homoglyphs[char]
+        charmap = list(zip([i] * len(charmap), charmap))
+        self.glyph_map.extend(charmap)
+
+  def bounds(self) -> List[Tuple[float, float]]:
+    return [(-1, len(self.glyph_map)-1)] * self.max_perturbs
+
+  def candidate(self, perturbations: List[float]) -> str:
+    candidate = [char for char in self.input]  
+    for perturb in map(integer, perturbations):
+      if perturb >= 0:
+        i, char = self.glyph_map[perturb]
+        candidate[i] = char
+    return ''.join(candidate)
+
+class ReorderNerTargetedObjective(NerTargetedObjective):
+
+  def bounds(self) -> List[Tuple[float, float]]:
+    return [(-1,len(self.input)-1)] * self.max_perturbs
+
+  def candidate(self, perturbations: List[float]) -> str:
+    def swaps(els) -> str:
+      res = ""
+      for el in els:
+          if isinstance(el, Swap):
+              res += swaps([LRO, LRI, RLO, LRI, el.one, PDI, LRI, el.two, PDI, PDF, PDI, PDF])
+          elif isinstance(el, str):
+              res += el
+          else:
+              for subel in el:
+                  res += swaps([subel])
+      return res
+
+    _candidate = [char for char in self.input]
+    for perturb in map(integer, perturbations):
+      if perturb >= 0 and len(_candidate) >= 2:
+        perturb = min(perturb, len(_candidate) - 2)
+        _candidate = _candidate[:perturb] + [Swap(_candidate[perturb+1], _candidate[perturb])] + _candidate[perturb+2:]
+
+    return swaps(_candidate)
+
+
+class DeletionNerTargetedObjective(NerTargetedObjective):
+
+  def __init__(self, model: Pipeline, input: str, labels: List[str], target: str, max_perturbs: int, del_chr: str = BKSP, ins_chr_min: str = '!', ins_chr_max: str = '~'):
+    super().__init__(model, input, labels, target, max_perturbs)
+    self.del_chr: str = del_chr
+    self.ins_chr_min: str = ins_chr_min
+    self.ins_chr_max: str = ins_chr_max
+
+  def bounds(self) -> List[Tuple[float, float]]:
+    return [(-1,len(self.input)-1), (ord(self.ins_chr_min),ord(self.ins_chr_max))] * self.max_perturbs
+
+  def candidate(self, perturbations: List[float]) -> str:
+    candidate = [char for char in self.input]
+    for i in range(0, len(perturbations), 2):
+      idx = integer(perturbations[i])
+      char = chr(natural(perturbations[i+1]))
+      candidate = candidate[:idx] + [char, self.del_chr] + candidate[idx:]
+      for j in range(i,len(perturbations), 2):
+        perturbations[j] += 2
+    return ''.join(candidate)
+
+
+class EmotionTargetedObjective():
+
+  def __init__(self, model: Pipeline, input: str, label: str, target: int, max_perturbs: int):
+    self.model: Pipeline = model
+    self.input: str = input
+    self.label: str = label
+    self.max_perturbs: int = max_perturbs
+    self.target: int = target
+
+  def objective(self) -> Callable[[List[float]], float]:
+      def _objective(perturbations: List[float]) -> float:
+        candidate: str = self.candidate(perturbations)
+        predicts = self.model(candidate)[0]
+        score = predicts[self.target]['score']
+        if np.argmax(list(map(lambda x: x['score'], predicts))) == self.target:
+          score += 1
+        return -score
+      return _objective
+
+  def differential_evolution(self, verbose=False, maxiter=3, popsize=32, polish=False) -> str:
+    start = process_time()
+    result = differential_evolution(self.objective(), self.bounds(),
+                                    disp=verbose, maxiter=maxiter,
+                                    popsize=popsize, polish=polish)
+    end = process_time()
+    successful_attack = result.fun <= -1
+    candidate = self.candidate(result.x)
+    predicts = self.model(candidate)
+    inp_predicts = self.model(self.input)
+    return {
+      'adv_example': candidate,
+      'adv_example_enc': result.x,
+      'input': self.input,
+      'golden_label': self.label,
+      'adv_predictions': predicts,
+      'input_prediction': inp_predicts,
+      'adv_target_success': successful_attack,
+      'target_label': emotion_classes[self.target],
+      'target_index': self.target,
+      'adv_generation_time': end - start,
+      'budget': self.max_perturbs,
+      'maxiter': maxiter,
+      'popsize': popsize
+    }
+
+
+class InvisibleCharacterEmotionTargetedObjective(EmotionTargetedObjective):
+  
+  def __init__(self, model: Pipeline, input: str, labels: List[str], target: str, max_perturbs: int, invisible_chrs: List[str] = [ZWJ,ZWSP,ZWNJ]):
+    super().__init__(model, input, labels, target, max_perturbs)
+    self.invisible_chrs = invisible_chrs
+
+  def bounds(self) -> List[Tuple[float, float]]:
+    return [(0,len(self.invisible_chrs)-1), (-1, len(self.input)-1)] * self.max_perturbs
+
+  def candidate(self, perturbations: List[float]) -> str:
+    candidate = [char for char in self.input]
+    for i in range(0, len(perturbations), 2):
+      inp_index = integer(perturbations[i+1])
+      if inp_index >= 0:
+        inv_char = self.invisible_chrs[natural(perturbations[i])]
+        candidate = candidate[:inp_index] + [inv_char] + candidate[inp_index:]
+    return ''.join(candidate)
+
+
+class HomoglyphEmotionTargetedObjective(EmotionTargetedObjective):
+
+  def __init__(self, model: Pipeline, input: str, labels: List[str], target: str, max_perturbs: int, homoglyphs: Dict[str,List[str]] = intentionals):
+    super().__init__(model, input, labels, target, max_perturbs)
+    self.homoglyphs = homoglyphs
+    self.glyph_map = []
+    for i, char in enumerate(self.input):
+      if char in self.homoglyphs:
+        charmap = self.homoglyphs[char]
+        charmap = list(zip([i] * len(charmap), charmap))
+        self.glyph_map.extend(charmap)
+
+  def bounds(self) -> List[Tuple[float, float]]:
+    return [(-1, len(self.glyph_map)-1)] * self.max_perturbs
+
+  def candidate(self, perturbations: List[float]) -> str:
+    candidate = [char for char in self.input]  
+    for perturb in map(integer, perturbations):
+      if perturb >= 0:
+        i, char = self.glyph_map[perturb]
+        candidate[i] = char
+    return ''.join(candidate)
+
+class ReorderEmotionTargetedObjective(EmotionTargetedObjective):
+
+  def bounds(self) -> List[Tuple[float, float]]:
+    return [(-1,len(self.input)-1)] * self.max_perturbs
+
+  def candidate(self, perturbations: List[float]) -> str:
+    def swaps(els) -> str:
+      res = ""
+      for el in els:
+          if isinstance(el, Swap):
+              res += swaps([LRO, LRI, RLO, LRI, el.one, PDI, LRI, el.two, PDI, PDF, PDI, PDF])
+          elif isinstance(el, str):
+              res += el
+          else:
+              for subel in el:
+                  res += swaps([subel])
+      return res
+
+    _candidate = [char for char in self.input]
+    for perturb in map(integer, perturbations):
+      if perturb >= 0 and len(_candidate) >= 2:
+        perturb = min(perturb, len(_candidate) - 2)
+        _candidate = _candidate[:perturb] + [Swap(_candidate[perturb+1], _candidate[perturb])] + _candidate[perturb+2:]
+
+    return swaps(_candidate)
+
+
+class DeletionEmotionTargetedObjective(EmotionTargetedObjective):
+
+  def __init__(self, model: Pipeline, input: str, labels: List[str], target: str, max_perturbs: int, del_chr: str = BKSP, ins_chr_min: str = '!', ins_chr_max: str = '~'):
+    super().__init__(model, input, labels, target, max_perturbs)
+    self.del_chr: str = del_chr
+    self.ins_chr_min: str = ins_chr_min
+    self.ins_chr_max: str = ins_chr_max
+
+  def bounds(self) -> List[Tuple[float, float]]:
+    return [(-1,len(self.input)-1), (ord(self.ins_chr_min),ord(self.ins_chr_max))] * self.max_perturbs
+
+  def candidate(self, perturbations: List[float]) -> str:
+    candidate = [char for char in self.input]
+    for i in range(0, len(perturbations), 2):
+      idx = integer(perturbations[i])
+      char = chr(natural(perturbations[i+1]))
+      candidate = candidate[:idx] + [char, self.del_chr] + candidate[idx:]
+      for j in range(i,len(perturbations), 2):
+        perturbations[j] += 2
+    return ''.join(candidate)
+
+
 # --- Helper Functions ---
 
 def some(*els):
@@ -924,6 +1209,22 @@ def natural(x: float) -> int:
     """Rounds float to the nearest natural number (positive int)"""
     return max(0, round(float(x)))
 
+def integer(x: float) -> int:
+    """Rounds float to the nearest int"""
+    return round(float(x))
+
+def detokenize(tokens: List[str]) -> str:
+  output = ""
+  for index, token in enumerate(tokens):
+    if (len(token) == 1 and token in punctuation) or index == 0:
+      output += token
+    else:
+      output += ' ' + token
+  return output
+
+def ner_tags(tags: List[int]) -> List[str]:
+  return list(map(lambda x: ner_labels[x], tags))
+
 def load_source(num_examples):
   # Build source and target mappings for BLEU scoring
   source = dict()
@@ -954,6 +1255,12 @@ def load_source(num_examples):
       for segid, seg in doc.items():
         target_list.append({ docid: { segid: target[docid][segid] }})
   return source_list, target_list, len(source_list)
+
+def load_ner_data(num_exmaples):
+  return load_dataset("conll2003", split=f'test[:{num_exmaples}]')
+
+def load_emotion_data(num_exmaples):
+  return load_dataset("emotion", split=f'test[:{num_exmaples}]')
 
 def experiment(model, objective, source, target, min_perturb, max_perturb, file, maxiter, popsize, n_examples, label, overwrite):
   if overwrite or not exists(file):
@@ -1068,7 +1375,7 @@ def mnli_targeted_experiment(objective, model, inputs, file, min_budget, max_bud
       perturbs[exp_label] = dict()
     if '0' not in perturbs[exp_label]:
       perturbs[exp_label]['0'] = dict()
-  for test in data:
+  for test in inputs:
     tokens = model.encode(test['sentence1'], test['sentence2'])
     predict = model.predict('mnli', tokens)
     probs = softmax(predict, dim=1).cpu().detach().numpy()[0]
@@ -1264,6 +1571,120 @@ def sponge_experiment(model, objective, source, target, min_perturb, max_perturb
               sleep(0.1)
             pbar.update(1)
 
+def ner_targeted_experiment(objective, model, inputs, file, min_budget, max_budget, maxiter, popsize, exp_label, overwrite):
+  if overwrite or not exists(file):
+    perturbs = { exp_label: { '0': dict() } }
+  else:
+    with open(file, 'rb') as f:
+      perturbs = pickle.load(f)
+    if exp_label not in perturbs:
+      perturbs[exp_label] = dict()
+    if '0' not in perturbs[exp_label]:
+      perturbs[exp_label]['0'] = dict()
+  for test in inputs:
+    input = detokenize(test['tokens'])
+    predicts = model(input)
+    labels = ner_tags(test['ner_tags'])
+    if test['id'] not in perturbs[exp_label]['0']:
+      perturbs[exp_label]['0'][test['id']] = dict()
+    for target in ner_classes:
+      if target not in perturbs[exp_label]['0'][test['id']]:
+        score = 0
+        for predict in predicts:
+          if predict['entity'].endswith(target):
+            score -= predict['score']
+        successful_attack = score < 0
+        perturbs[exp_label]['0'][test['id']][target] = {
+              'adv_example': input,
+              'adv_example_enc': [],
+              'input': input,
+              'golden_labels': labels,
+              'adv_predictions': predicts,
+              'input_prediction': predicts,
+              'adv_target_success': successful_attack,
+              'target_label': target,
+              'adv_generation_time': 0,
+              'budget': 0,
+              'maxiter': maxiter,
+              'popsize': popsize
+            }
+  with tqdm(total=len(inputs)*(max_budget-min_budget+1)*len(ner_classes), desc="Adv. Examples") as pbar:
+    for budget in range(min_budget, max_budget+1):
+      if str(budget) not in perturbs[exp_label]:
+        perturbs[exp_label][str(budget)] = dict()
+      for input in inputs:
+        if input['id'] not in perturbs[exp_label][str(budget)]:
+          perturbs[exp_label][str(budget)][input['id']] = dict()
+        for target in ner_classes:
+          if target not in perturbs[exp_label][str(budget)][input['id']]:
+            sentence = detokenize(input['tokens'])
+            obj = objective(model, sentence, ner_tags(input['ner_tags']), target, budget)
+            example = obj.differential_evolution(verbose=False, maxiter=maxiter, popsize=popsize)
+            perturbs[exp_label][str(budget)][input['id']][target] = example
+            with open(file, 'wb') as f:
+              pickle.dump(perturbs, f)
+          else:
+            # Required for progress bar to update correctly
+            sleep(0.1)
+          pbar.update(1)
+
+def emotion_targeted_experiment(objective, model, inputs, file, min_budget, max_budget, maxiter, popsize, exp_label, overwrite):
+  if overwrite or not exists(file):
+    perturbs = { exp_label: { '0': dict() } }
+  else:
+    with open(file, 'rb') as f:
+      perturbs = pickle.load(f)
+    if exp_label not in perturbs:
+      perturbs[exp_label] = dict()
+    if '0' not in perturbs[exp_label]:
+      perturbs[exp_label]['0'] = dict()
+  for idx, test in enumerate(inputs):
+    input = test['text']
+    predicts = model(input)[0]
+    labels = emotion_classes[test['label']]
+    if str(idx) not in perturbs[exp_label]['0']:
+      perturbs[exp_label]['0'][str(idx)] = dict()
+    for target, target_label in enumerate(emotion_classes):
+      if target_label not in perturbs[exp_label]['0'][str(idx)]:
+        score = -predicts[target]['score']
+        if np.argmax(list(map(lambda x: x['score'], predicts))) == target:
+          score -= 1
+        successful_attack = score <= -1
+        perturbs[exp_label]['0'][str(idx)][target_label] = {
+              'adv_example': input,
+              'adv_example_enc': [],
+              'input': input,
+              'golden_label': label,
+              'adv_predictions': predicts,
+              'input_prediction': predicts,
+              'adv_target_success': successful_attack,
+              'target_label': target_label,
+              'target_index': target,
+              'adv_generation_time': 0,
+              'budget': 0,
+              'maxiter': maxiter,
+              'popsize': popsize
+            }
+  with tqdm(total=len(inputs)*(max_budget-min_budget+1)*len(emotion_classes), desc="Adv. Examples") as pbar:
+    for budget in range(min_budget, max_budget+1):
+      if str(budget) not in perturbs[exp_label]:
+        perturbs[exp_label][str(budget)] = dict()
+      for idx, input in enumerate(inputs):
+        if str(idx) not in perturbs[exp_label][str(budget)]:
+          perturbs[exp_label][str(budget)][str(idx)] = dict()
+        for target, target_label in enumerate(emotion_classes):
+          if target_label not in perturbs[exp_label][str(budget)][str(idx)]:
+            sentence = input['text']
+            obj = objective(model, sentence, emotion_classes[input['label']], target, budget)
+            example = obj.differential_evolution(verbose=False, maxiter=maxiter, popsize=popsize)
+            perturbs[exp_label][str(budget)][str(idx)][target_label] = example
+            with open(file, 'wb') as f:
+              pickle.dump(perturbs, f)
+          else:
+            # Required for progress bar to update correctly
+            sleep(0.1)
+          pbar.update(1)
+
 def load_en2fr(cpu):
   # Load pre-trained translation model
   print("Loading EN->FR translation model.")
@@ -1311,6 +1732,12 @@ def load_perspective(api_key):
     cache=MemoryCache()
   )
 
+def load_ner(cpu):
+  return pipeline("ner", model="dbmdz/bert-large-cased-finetuned-conll03-english", device=(-1 if cpu else 0))
+
+def load_emotion(cpu):
+  return pipeline("text-classification", model='bhadresh-savani/distilbert-base-uncased-emotion', return_all_scores=True, device=(-1 if cpu else 0))
+
 # -- CLI ---
 
 if __name__ == '__main__':
@@ -1326,6 +1753,8 @@ if __name__ == '__main__':
   task.add_argument('-m', '--mnli', action='store_true', help="Target MNLI task (Roberta).")
   task.add_argument('-T', '--max-toxic', action='store_true', help="Target IBM Max Toxic model for toxic content.")
   task.add_argument('-P', '--perspective', action='store_true', help="Target Google Perspective API for toxic content.")
+  task.add_argument('-N', '--ner', action='store_true', help="Target Huggingface NER model for entity recognition.")
+  task.add_argument('-e', '--emotion', action='store_true', help="Target Huggingface emotion model for sentiment analysis.")
   parser.add_argument('-c', '--cpu', action='store_true', help="Use CPU for ML inference instead of CUDA.")
   parser.add_argument('pkl_file', help="File to contain Python pickled output.")
   parser.add_argument('-n', '--num-examples', type=int, default=500, help="Number of adversarial examples to generate.")
@@ -1521,5 +1950,74 @@ if __name__ == '__main__':
       label = "perspective_deletions"
 
     perspective_experiment(objective, perspetive, args.pkl_file, args.min_perturbs, args.max_perturbs, data, args.maxiter, args.popsize, label, args.overwrite, args.rate_limit)
+
+  elif args.ner:
+    if not args.targeted:
+      print("Untargeted attacks for NER have not been implemented.")
+      sys.exit(1)
+    elif args.targeted_no_logits:
+      print("No-logit targeted attacks for NER have not been implemented.")
+      sys.exit(1)
+    elif args.sponge:
+      print("Sponge example attacks for NER have not been implemented.")
+      sys.exit(1)
+
+    ner = load_ner(args.cpu)
+    ner_data = load_ner_data(args.num_examples)
+    print(f"Loaded {len(ner_data)} strings from corpus.")
+
+    if args.invisible_chars:
+      print(f"Starting invisible characters NER experiment.")
+      objective = InvisibleCharacterNerTargetedObjective
+      label = "ner_targeted_invisibles"
+    elif args.homoglyphs:
+      print(f"Starting homoglyphs NER experiment.")
+      objective = HomoglyphNerTargetedObjective
+      label = "ner_targeted_homoglyphs"
+    elif args.reorderings:
+      print(f"Starting reorderings NER experiment.")
+      objective = ReorderNerTargetedObjective
+      label = "ner_targeted_reorderings"
+    elif args.deletions:
+      print(f"Starting deletions NER experiment.")
+      objective = DeletionNerTargetedObjective
+      label = "ner_targeted_deletions"
+
+    ner_targeted_experiment(objective, ner, ner_data, args.pkl_file, args.min_perturbs, args.max_perturbs, args.maxiter, args.popsize, label, args.overwrite)
+
+  
+  elif args.emotion:
+    if not args.targeted:
+      print("Untargeted attacks for the emotion model have not been implemented.")
+      sys.exit(1)
+    elif args.targeted_no_logits:
+      print("No-logit targeted attacks for the emotion model have not been implemented.")
+      sys.exit(1)
+    elif args.sponge:
+      print("Sponge example attacks for the emotion model have not been implemented.")
+      sys.exit(1)
+
+    emotion = load_emotion(args.cpu)
+    emotion_data = load_emotion_data(args.num_examples)
+    print(f"Loaded {len(emotion_data)} strings from corpus.")
+
+    if args.invisible_chars:
+      print(f"Starting invisible characters emotion experiment.")
+      objective = InvisibleCharacterEmotionTargetedObjective
+      label = "emotion_targeted_invisibles"
+    elif args.homoglyphs:
+      print(f"Starting homoglyphs emotion experiment.")
+      objective = HomoglyphEmotionTargetedObjective
+      label = "emotion_targeted_homoglyphs"
+    elif args.reorderings:
+      print(f"Starting reorderings emotion experiment.")
+      objective = ReorderEmotionTargetedObjective
+      label = "emotion_targeted_reorderings"
+    elif args.deletions:
+      print(f"Starting deletions emotion experiment.")
+      objective = DeletionEmotionTargetedObjective
+      label = "emotion_targeted_deletions"
+
+    emotion_targeted_experiment(objective, emotion, emotion_data, args.pkl_file, args.min_perturbs, args.max_perturbs, args.maxiter, args.popsize, label, args.overwrite)
 
 print(f"Experiment complete. Results written to {args.pkl_file}.")
