@@ -128,15 +128,12 @@ export default function Basics() {
             <p className="main-text pt-3 pb-4">If you use our paper or anything on this site in your own work, please cite the following:</p>
             <div className="bibtex d-flex flex-wrap">
               <div ref={refBibTex}>
-                <span className="code">@article&#123;boucher_imperceptible_2021,</span>
+                <span className="code">@inproceedings&#123;boucher_2022_badchars,</span>
                   <span className="code tab">title = &#123;Bad &#123;Characters&#125;: &#123;Imperceptible&#125; &#123;NLP&#125; &#123;Attacks&#125;&#125;,</span>
                   <span className="code tab">author = &#123;Nicholas Boucher and Ilia Shumailov and Ross Anderson and Nicolas Papernot&#125;,</span>
-                  <span className="code tab">year = &#123;2021&#125;,</span>
-                  <span className="code tab">journal = &#123;Preprint&#125;,</span>
-                  <span className="code tab">eprint = &#123;2106.09898&#125;,</span>
-                  <span className="code tab">archivePrefix = &#123;arXiv&#125;,</span>
-                  <span className="code tab">primaryClass = &#123;cs.CL&#125;,</span>
-                  <span className="code tab">url = &#123;https://arxiv.org/abs/2106.09898&#125;</span>
+                  <span className="code tab">booktitle = &#123;43rd IEEE Symposium on Security and Privacy&#125;,</span>
+                  <span className="code tab">year = &#123;2022&#125;,</span>
+                  <span className="code tab">organization = &#123;IEEE&#125;</span>
                 <span className="code">&#125;</span>
               </div>
               <div className="ml-auto align-self-end">

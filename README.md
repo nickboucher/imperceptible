@@ -32,14 +32,11 @@ A website to convey the results of the paper and provide adversarial example gen
 If you use anything in this repository, in the [*Bad Characters*](https://arxiv.org/abs/2106.09898) paper, or on [imperceptible.ml](https://imperceptible.ml) in your own work, please cite the following:
 
 ```bibtex
-@article{boucher_imperceptible_2021,
+@inproceedings{boucher_2022_badchars,
     title = {Bad {Characters}: {Imperceptible} {NLP} {Attacks}},
     author = {Nicholas Boucher and Ilia Shumailov and Ross Anderson and Nicolas Papernot},
-    year = {2021},
-    journal = {Preprint},
-    eprint = {2106.09898},
-    archivePrefix = {arXiv},
-    primaryClass = {cs.CL},
-    url = {https://arxiv.org/abs/2106.09898}
+    booktitle = {43rd IEEE Symposium on Security and Privacy},
+    year = {2022},
+    organization = {IEEE}
 }
 ```
