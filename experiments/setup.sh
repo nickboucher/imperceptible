@@ -10,7 +10,7 @@ curl -O https://www.unicode.org/Public/security/latest/intentional.txt
 rm -rf assets/
 rm -rf toxic/
 mkdir assets
-wget https://max-cdn.cdn.appdomain.cloud/max-toxic-comment-classifier/1.0.0/assets.tar.gz --output-document=assets/assets.tar.gz
+wget https://codait-cos-max.s3.us.cloud-object-storage.appdomain.cloud/max-toxic-comment-classifier/1.0.0/assets.tar.gz --output-document=assets/assets.tar.gz
 tar -x -C assets/ -f assets/assets.tar.gz -v
 rm assets/assets.tar.gz
 git clone https://github.com/IBM/MAX-Toxic-Comment-Classifier.git
